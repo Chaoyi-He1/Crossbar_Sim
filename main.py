@@ -140,5 +140,6 @@ def save_output(out, output_file):
     # Save the output vector to the output .csv file
     pd.DataFrame(out).to_csv(output_file, header=None, index=None)
 
+
 if __name__ == '__main__':
     pass
