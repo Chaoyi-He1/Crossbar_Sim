@@ -38,9 +38,9 @@ def Quantize_VMM(voltages, conductances, v_range, g_range):
     qtz_conductances = np.round((conductances - min_g) / (max_g - min_g) * (g_range[1] - g_range[0]) + g_range[0])
     
     a = (max_v - min_v) / (v_range[1] - v_range[0])
-    b = min_v - a * v_range[0]
+    b = v_range[0] - a * min_v
     c = (max_g - min_g) / (g_range[1] - g_range[0])
-    d = min_g - c * g_range[0]
+    d = g_range[0] - c * min_g
     
     # Compute the output vector
     out = np.matmul(qtz_voltages, qtz_conductances)
