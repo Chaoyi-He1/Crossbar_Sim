@@ -126,3 +126,19 @@ def read_files(input_V_file, conductance_file, output_file):
     ideal_out = pd.read_csv(output_file, header=None).to_numpy()
     
     return Voltage, conductance, ideal_out
+
+
+'''
+This function saves the output vector to the output .csv file
+'''
+def save_output(out, output_file):
+    '''
+    Parameters:
+        out: output vector (Nxm), where N is the number of vectors and m is the output vector length
+        output_file: the output .csv file name
+    '''
+    # Save the output vector to the output .csv file
+    pd.DataFrame(out).to_csv(output_file, header=None, index=None)
+
+if __name__ == '__main__':
+    pass
