@@ -65,7 +65,8 @@ The function is to rescale the output vectors from the range [0, 255] to the ran
 and then subtract the terms "adV", "bcM" and "bd" from the output vectors.
 The function then quantizes the output vector acVM, deducted the terms "adV", "bcM" and "bd" back to the range [0, 255]
 '''
-def Deduct_VM(out, a, b, c, d, v_range, g_range):
+def Deduct_VM(out, a, b, c, d, v_range, g_range, V, M):
+    
     '''
     Parameters:
         out: output vector (Nxm), where N is the number of vectors and m is the output vector length
@@ -79,6 +80,8 @@ def Deduct_VM(out, a, b, c, d, v_range, g_range):
                  The voltages will be quantized to integers in the range [v_range[0], v_range[1]]
         g_range: conductance quantization range (2x1), where the first element is the minimum and the second element is the maximum
                  The conductances will be quantized to integers in the range [g_range[0], g_range[1]]
+        V: input voltage vectors (Nxl) as a numpy array, where N is the number of vectors and l is the length of each vector
+        M: conductance matrix (lxm) as a numpy array, where l is the length of each vector and m is the output vector length
     Returns:
         out: output vector (Nxm), where N is the number of vectors and m is the output vector length
              the output is originally in the range [0, 255] with integer values, the output includes all the terms
@@ -92,9 +95,9 @@ def Deduct_VM(out, a, b, c, d, v_range, g_range):
     rescaled_out = (out - min_out) / (max_out - min_out) * (v_range[1] * g_range[1] - v_range[0] * g_range[0]) + v_range[0] * g_range[0]
     
     # Deduct the terms "adV", "bcM" and "bd" from the output vector
-    adV = a * d * v_range[0]
-    bcM = b * c * g_range[0]
-    bd = b * d
+    adV = a * np.matmul(V, d * np.ones((M.shape[0], M.shape[1])))
+    bcM = c * np.matmul(b * np.ones((V.shape[0], V.shape[1])), M)
+    bd = np.matmul(b * np.ones((V.shape[0], V.shape[1])), d * np.ones((M.shape[0], M.shape[1])))
     out = rescaled_out - adV - bcM - bd
     
     # Quantize the output vector to the range [0, 255]
