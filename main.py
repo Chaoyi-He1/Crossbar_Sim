@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import os
 import math
+import matplotlib.pyplot as plt
 
 
 '''
@@ -26,6 +27,8 @@ def Quantize_VMM(voltages, conductances, v_range, g_range):
         b: the bias used to scale the voltages to the range [v_range[0], v_range[1]]
         c: the scaling factor used to scale the conductances to the range [g_range[0], g_range[1]]
         d: the bias used to scale the conductances to the range [g_range[0], g_range[1]] 
+        max_out: the maximum value of the output matrix
+        min_out: the minimum value of the output matrix
     The quantization will quantize the voltages and conductances to integers in the range "v_range" and "g_range" respectively
     '''
     min_v = np.min(voltages)
@@ -48,9 +51,11 @@ def Quantize_VMM(voltages, conductances, v_range, g_range):
     # Quantize the output vector to the range [0, 255]
     min_out = np.min(out)
     max_out = np.max(out)
-    out = np.round((out - min_out) / (max_out - min_out) * 255)
+    qtz_out = np.round((out - min_out) / (max_out - min_out) * 255)
+    max_out = np.max(out)
+    min_out = np.min(out)
     
-    return out, a, b, c, d
+    return qtz_out, a, b, c, d, max_out, min_out
 
 
 '''
@@ -65,7 +70,7 @@ The function is to rescale the output vectors from the range [0, 255] to the ran
 and then subtract the terms "adV", "bcM" and "bd" from the output vectors.
 The function then quantizes the output vector acVM, deducted the terms "adV", "bcM" and "bd" back to the range [0, 255]
 '''
-def Deduct_VM(out, a, b, c, d, v_range, g_range, V, M):
+def Deduct_VM(out, a, b, c, d, max_range, min_range, V, M):
     
     '''
     Parameters:
@@ -76,10 +81,8 @@ def Deduct_VM(out, a, b, c, d, v_range, g_range, V, M):
         b: the bias used to scale the voltages to the range [v_range[0], v_range[1]]
         c: the scaling factor used to scale the conductances to the range [g_range[0], g_range[1]]
         d: the bias used to scale the conductances to the range [g_range[0], g_range[1]] 
-        v_range: voltage quantization range (2x1), where the first element is the minimum and the second element is the maximum
-                 The voltages will be quantized to integers in the range [v_range[0], v_range[1]]
-        g_range: conductance quantization range (2x1), where the first element is the minimum and the second element is the maximum
-                 The conductances will be quantized to integers in the range [g_range[0], g_range[1]]
+        max_range: the maximum value of the output matrix before quantization to the range [0, 255]
+        min_range: the minimum value of the output matrix before quantization to the range [0, 255]
         V: input voltage vectors (Nxl) as a numpy array, where N is the number of vectors and l is the length of each vector
         M: conductance matrix (lxm) as a numpy array, where l is the length of each vector and m is the output vector length
     Returns:
@@ -92,7 +95,8 @@ def Deduct_VM(out, a, b, c, d, v_range, g_range, V, M):
     # Rescale the output vector to the range [v_range[0] * g_range[0], v_range[1] * g_range[1]]
     min_out = np.min(out)
     max_out = np.max(out)
-    rescaled_out = (out - min_out) / (max_out - min_out) * (v_range[1] * g_range[1] - v_range[0] * g_range[0]) + v_range[0] * g_range[0]
+    rescaled_out = (out - min_out) / (max_out - min_out) * (max_range - min_range) + min_range
+    # diff = rescaled_out - out
     
     # Deduct the terms "adV", "bcM" and "bd" from the output vector
     adV = a * np.matmul(V, d * np.ones((M.shape[0], M.shape[1])))
@@ -146,14 +150,26 @@ def save_output(out, output_file):
 
 if __name__ == '__main__':
     input_dim = 20
-    no_batch = 100
+    no_batch = 1
     output_dim = 30
-    v_range = [10,245]
-    g_range = [15,240]
+    v_range = [10, 245]
+    g_range = [15, 240]
 
-    float_weight = np.random.randn(input_dim,output_dim)
-    float_in = np.random.randn(no_batch,input_dim)
-    float_out = np.dot(float_in,float_weight)
-    Quan_out,a,b,c,d = Quantize_VMM(float_in,float_weight,v_range,g_range)
-    Deduct_out = Deduct_VM(Quan_out,a,b,c,d,v_range,g_range,float_in,float_weight)
-    print(np.sum(np.abs(float_out-Deduct_out)))
+    float_weight = np.random.randn(input_dim, output_dim)
+    float_in = np.random.randn(no_batch, input_dim)
+    float_out = np.dot(float_in, float_weight)
+    Quan_out, a, b, c, d, max_range, min_range = Quantize_VMM(float_in, float_weight, v_range, g_range)
+    Deduct_out = Deduct_VM(Quan_out, a, b, c, d, max_range, min_range, float_in, float_weight)
+    
+    # plot float_out and Deduct_out in a figure with two subplots
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(float_out.flatten(),label='float_out')
+    plt.legend()
+    plt.subplot(2,1,2)
+    plt.plot(Deduct_out.flatten(),label='Deduct_out')
+    plt.legend()
+    plt.show()
+    # save the figure
+    plt.savefig('float_out_Deduct_out.png')
+    
