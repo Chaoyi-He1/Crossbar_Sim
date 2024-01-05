@@ -37,9 +37,9 @@ def Quantize_VMM(voltages, conductances, v_range, g_range):
     qtz_voltages = np.round((voltages - min_v) / (max_v - min_v) * (v_range[1] - v_range[0]) + v_range[0])
     qtz_conductances = np.round((conductances - min_g) / (max_g - min_g) * (g_range[1] - g_range[0]) + g_range[0])
     
-    a = (max_v - min_v) / (v_range[1] - v_range[0])
+    a = (v_range[1] - v_range[0]) / (max_v - min_v)
     b = v_range[0] - a * min_v
-    c = (max_g - min_g) / (g_range[1] - g_range[0])
+    c = (g_range[1] - g_range[0]) / (max_g - min_g)
     d = g_range[0] - c * min_g
     
     # Compute the output vector
@@ -145,4 +145,15 @@ def save_output(out, output_file):
 
 
 if __name__ == '__main__':
-    pass
+    input_dim = 20
+    no_batch = 100
+    output_dim = 30
+    v_range = [10,245]
+    g_range = [15,240]
+
+    float_weight = np.random.randn(input_dim,output_dim)
+    float_in = np.random.randn(no_batch,input_dim)
+    float_out = np.dot(float_in,float_weight)
+    Quan_out,a,b,c,d = Quantize_VMM(float_in,float_weight,v_range,g_range)
+    Deduct_out = Deduct_VM(Quan_out,a,b,c,d,v_range,g_range,float_in,float_weight)
+    print(np.sum(np.abs(float_out-Deduct_out)))
