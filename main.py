@@ -110,6 +110,66 @@ def Deduct_VM(out, a, b, c, d, max_range, min_range, V, M):
 
 
 '''
+This function is to simulate the VMM with differential pairs
+The matrix will have two diagonal parts, the first part is the normal matrix to be quantized in the range [g_range[0], g_range[1]]
+The second part is the median value of the quantization range, which is the value to be subtracted from the output vector
+if the conductance range has odd number of values, the median value is the middle value of the range
+if the conductance range has even number of values, the median value should be calculated as the average of the two middle values
+'''
+def diff_VMM(voltages, conductances, v_range, g_range):
+    '''
+    Parameters:
+        voltages: input voltage vectors (Nxl), where N is the number of vectors and l is the length of each vector
+        conductances: conductance matrix (lxm), where l is the length of each vector and m is the output vector length
+        v_range: voltage quantization range (2x1), where the first element is the minimum and the second element is the maximum
+                 The voltages will be quantized to integers in the range [v_range[0], v_range[1]]
+        g_range: conductance quantization range (2x1), where the first element is the minimum and the second element is the maximum
+                 The conductances will be quantized to integers in the range [g_range[0], g_range[1]]
+    Returns:
+        out: output vector (Nxm), where N is the number of vectors and m is the output vector length
+             the output is originally in the range [v_range[0] * g_range[0], v_range[1] * g_range[1]],
+             then it is quantized to the range [0, 255]
+        a: the scaling factor used to scale the voltages to the range [v_range[0], v_range[1]]
+        b: the bias used to scale the voltages to the range [v_range[0], v_range[1]]
+        c: the scaling factor used to scale the conductances to the range [g_range[0], g_range[1]]
+        d: the bias used to scale the conductances to the range [g_range[0], g_range[1]] 
+        max_out: the maximum value of the output matrix
+        min_out: the minimum value of the output matrix
+    The quantization will quantize the voltages and conductances to integers in the range "v_range" and "g_range" respectively
+    '''
+    min_v = np.min(voltages)
+    max_v = np.max(voltages)
+    min_g = np.min(conductances)
+    max_g = np.max(conductances)
+    
+    # Quantize the voltages and conductances to integers in the range "v_range" and "g_range" respectively
+    qtz_voltages = np.round((voltages - min_v) / (max_v - min_v) * (v_range[1] - v_range[0]) + v_range[0])
+    qtz_conductances = np.round((conductances - min_g) / (max_g - min_g) * (g_range[1] - g_range[0]) + g_range[0])
+    
+    median_g = (g_range[0] + g_range[1]) / 2
+    
+    a = (v_range[1] - v_range[0]) / (max_v - min_v)
+    b = v_range[0] - a * min_v
+    c = (g_range[1] - g_range[0]) / (max_g - min_g)
+    d = g_range[0] - c * min_g
+    
+    # Compute the output vector
+    out = np.matmul(qtz_voltages, qtz_conductances)
+    
+    # Quantize the output vector to the range [0, 255]
+    min_out = np.min(out)
+    max_out = np.max(out)
+    qtz_out = np.round((out - min_out) / (max_out - min_out) * 255)
+    
+    # Deduct the median value of the conductance range from the output vector
+    median_out = median_g * np.matmul(qtz_voltages, np.ones((qtz_conductances.shape[1], qtz_conductances.shape[0])))
+    qtz_median_out = np.round((median_out - min_out) / (max_out - min_out) * 255)
+    qtz_out = qtz_out - qtz_median_out
+    
+    return qtz_out, a, b, c, d, max_out, min_out
+
+
+'''
 This function is to real the input voltage vectors, conductance matrix and theoretical output vectors 
 from the input .csv file
 '''
@@ -157,16 +217,23 @@ if __name__ == '__main__':
     float_out = np.dot(float_in, float_weight)
     Quan_out, a, b, c, d, max_range, min_range = Quantize_VMM(float_in, float_weight, v_range, g_range)
     Deduct_out = Deduct_VM(Quan_out, a, b, c, d, max_range, min_range, float_in, float_weight)
+    Diff_out, a, b, c, d, max_range, min_range = diff_VMM(float_in, float_weight, v_range, g_range)
     
-    # plot float_out and Deduct_out in a figure with two subplots
+    # plot float_out and Deduct_out and Diff_out in a figure with three subplots
     plt.figure()
-    plt.subplot(2,1,1)
+    plt.subplot(3,1,1)
     plt.plot(float_out.flatten(),label='float_out')
     plt.legend()
-    plt.subplot(2,1,2)
+    plt.grid()
+    plt.subplot(3,1,2)
     plt.plot(Deduct_out.flatten(),label='Deduct_out')
     plt.legend()
+    plt.grid()
+    plt.subplot(3,1,3)
+    plt.plot(Diff_out.flatten(),label='Diff_out')
+    plt.legend()
+    plt.grid()
     plt.show()
     # save the figure
-    plt.savefig('float_out_Deduct_out.png')
+    plt.savefig('float_out_Deduct_out_Diff_out.png')
     
