@@ -150,7 +150,7 @@ def save_output(out, output_file):
 
 if __name__ == '__main__':
     input_dim = 20
-    no_batch = 1
+    no_batch = 2
     output_dim = 30
     v_range = [10, 245]
     g_range = [15, 240]
