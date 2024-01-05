@@ -69,7 +69,6 @@ and then subtract the terms "adV", "bcM" and "bd" from the output vectors.
 The function then quantizes the output vector acVM, deducted the terms "adV", "bcM" and "bd" back to the range [0, 255]
 '''
 def Deduct_VM(out, a, b, c, d, max_range, min_range, V, M):
-    
     '''
     Parameters:
         out: output vector (Nxm), where N is the number of vectors and m is the output vector length
