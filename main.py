@@ -52,8 +52,6 @@ def Quantize_VMM(voltages, conductances, v_range, g_range):
     min_out = np.min(out)
     max_out = np.max(out)
     qtz_out = np.round((out - min_out) / (max_out - min_out) * 255)
-    max_out = np.max(out)
-    min_out = np.min(out)
     
     return qtz_out, a, b, c, d, max_out, min_out
 
