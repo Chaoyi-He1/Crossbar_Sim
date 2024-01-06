@@ -155,16 +155,13 @@ def diff_VMM(voltages, conductances, v_range, g_range):
     
     # Compute the output vector
     out = np.matmul(qtz_voltages, qtz_conductances)
+    median_out = np.matmul(qtz_voltages, median_g * np.ones((qtz_conductances.shape[0], qtz_conductances.shape[1])))
+    out = out - median_out - c * np.matmul(b * np.ones((qtz_voltages.shape[0], qtz_voltages.shape[1])), conductances) 
     
     # Quantize the output vector to the range [0, 255]
     min_out = np.min(out)
     max_out = np.max(out)
     qtz_out = np.round((out - min_out) / (max_out - min_out) * 255)
-    
-    # Deduct the median value of the conductance range from the output vector
-    median_out = median_g * np.matmul(qtz_voltages, np.ones((qtz_conductances.shape[1], qtz_conductances.shape[0])))
-    qtz_median_out = np.round((median_out - min_out) / (max_out - min_out) * 255)
-    qtz_out = qtz_out - qtz_median_out
     
     return qtz_out, a, b, c, d, max_out, min_out
 
