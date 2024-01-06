@@ -156,12 +156,17 @@ def diff_VMM(voltages, conductances, v_range, g_range):
     # Compute the output vector
     out = np.matmul(qtz_voltages, qtz_conductances)
     median_out = np.matmul(qtz_voltages, median_g * np.ones((qtz_conductances.shape[0], qtz_conductances.shape[1])))
-    out = out - median_out - c * np.matmul(b * np.ones((qtz_voltages.shape[0], qtz_voltages.shape[1])), conductances) 
     
-    # Quantize the output vector to the range [0, 255]
     min_out = np.min(out)
     max_out = np.max(out)
+    
+    out = out - c * np.matmul(b * np.ones((qtz_voltages.shape[0], qtz_voltages.shape[1])), conductances)
+    
+    # Quantize the output vector to the range [0, 255]
     qtz_out = np.round((out - min_out) / (max_out - min_out) * 255)
+    qtz_median_out = np.round((median_out - min_out) / (max_out - min_out) * 255)
+    qtz_out = qtz_out - qtz_median_out
+    qtz_out = np.round((qtz_out - np.min(qtz_out)) / (np.max(qtz_out) - np.min(qtz_out)) * 255)
     
     return qtz_out, a, b, c, d, max_out, min_out
 
@@ -215,6 +220,7 @@ if __name__ == '__main__':
     Quan_out, a, b, c, d, max_range, min_range = Quantize_VMM(float_in, float_weight, v_range, g_range)
     Deduct_out = Deduct_VM(Quan_out, a, b, c, d, max_range, min_range, float_in, float_weight)
     Diff_out, a, b, c, d, max_range, min_range = diff_VMM(float_in, float_weight, v_range, g_range)
+    print(np.sum(np.abs(Deduct_out - Diff_out)))
     
     # plot float_out and Deduct_out and Diff_out in a figure with three subplots
     plt.figure()
