@@ -220,7 +220,6 @@ if __name__ == '__main__':
     Quan_out, a, b, c, d, max_range, min_range = Quantize_VMM(float_in, float_weight, v_range, g_range)
     Deduct_out = Deduct_VM(Quan_out, a, b, c, d, max_range, min_range, float_in, float_weight)
     Diff_out, a, b, c, d, max_range, min_range = diff_VMM(float_in, float_weight, v_range, g_range)
-    print(np.sum(np.abs(Deduct_out - Diff_out)))
     
     # plot float_out and Deduct_out and Diff_out in a figure with three subplots
     plt.figure()
