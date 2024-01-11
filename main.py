@@ -208,14 +208,12 @@ def save_output(out, output_file):
 
 
 if __name__ == '__main__':
-    input_dim = 20
-    no_batch = 2
-    output_dim = 30
-    v_range = [10, 245]
-    g_range = [15, 240]
+    v_range = [20, 240]
+    g_range = [30, 235]
 
-    float_weight = np.random.randn(input_dim, output_dim)
-    float_in = np.random.randn(no_batch, input_dim)
+    float_in, float_weight, exp_out = read_files('input_V.csv', 
+                                                 'conductance.csv', 
+                                                 'output.csv')
     float_out = np.dot(float_in, float_weight)
     Quan_out, a, b, c, d, max_range, min_range = Quantize_VMM(float_in, float_weight, v_range, g_range)
     Deduct_out = Deduct_VM(Quan_out, a, b, c, d, max_range, min_range, float_in, float_weight)
