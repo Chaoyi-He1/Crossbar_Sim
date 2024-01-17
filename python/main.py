@@ -258,7 +258,7 @@ if __name__ == '__main__':
     
     #calibrate the output
     start_index = np.random.randint(0, float_out.shape[0] - 1000)
-    p0, p1 = calibrate_p0_p1(exp_out[start_index:start_index + 1000, :], Quan_out[start_index:start_index + 1000, :])
+    p0, p1 = calibrate_p0_p1(exp_out, Quan_out)  # [start_index:start_index + 1000, :]
     exp_out_calib = calibrate_data(exp_out, p0, p1)
     
     Deduct_out_exp = Deduct_VM(exp_out_calib, a, b, c, d, max_range, min_range, float_in, float_weight)
