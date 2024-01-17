@@ -257,7 +257,8 @@ if __name__ == '__main__':
     Quan_out, a, b, c, d, max_range, min_range = Quantize_VMM(float_in, float_weight, v_range, g_range)
     
     #calibrate the output
-    p0, p1 = calibrate_p0_p1(exp_out[:1000, :], Quan_out[:1000, :])
+    start_index = np.random.randint(0, float_out.shape[0] - 1000)
+    p0, p1 = calibrate_p0_p1(exp_out[start_index:start_index + 1000, :], Quan_out[start_index:start_index + 1000, :])
     exp_out_calib = calibrate_data(exp_out, p0, p1)
     
     Deduct_out_exp = Deduct_VM(exp_out_calib, a, b, c, d, max_range, min_range, float_in, float_weight)
@@ -270,20 +271,22 @@ if __name__ == '__main__':
           np.mean(np.abs(Deduct_out_exp - Deduct_out_ideal)))
     
     # plot float_out and Deduct_out and Diff_out in a figure with three subplots
+    # randomly pick 512 consecutive elements from the output vectors
+    start_index = np.random.randint(0, len(float_out) - 256)
     plt.figure()
     plt.subplot(3, 1, 1)
-    plt.plot(float_out.flatten()[:100], label='float_out')
+    plt.plot(float_out.flatten()[start_index : start_index + 256], label='float_out')
     plt.legend()
     plt.grid()
     plt.subplot(3, 1, 2)
-    plt.plot(Deduct_out_ideal.flatten()[:100], label='Deduct_out')
+    plt.plot(Deduct_out_ideal.flatten()[start_index : start_index + 256], label='Deduct_out_ideal')
     plt.legend()
     plt.grid()
     plt.subplot(3, 1, 3)
-    plt.plot(Deduct_out_exp.flatten()[:100], label='Diff_out')
+    plt.plot(Deduct_out_exp.flatten()[start_index : start_index + 256], label='Diff_out_exp')
     plt.legend()
     plt.grid()
     plt.show()
     # save the figure
-    plt.savefig('float_out_Deduct_out_Diff_out.png')
+    plt.savefig('./results/float_out_vs_Deduct_out_ideal_vs_Deduct_out_exp.png')
     
