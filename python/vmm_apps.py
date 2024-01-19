@@ -2,10 +2,10 @@ import numpy as np
 import sys
 # sys.path.append('./Crossbar_Sim/python')
 
-from Crossbar_Sim.python.VMM_sim import Quantize_VMM
-from Crossbar_Sim.python.VMM_sim import Deduct_VM
-from Crossbar_Sim.python.visualize import plot_array
-from Crossbar_Sim.python.VMM_post_process import *
+from python.VMM_sim import Quantize_VMM
+from python.VMM_sim import Deduct_VM
+from python.visualize import plot_array
+from python.VMM_post_process import *
 
 # from flow_file_generate import file_generate
 
