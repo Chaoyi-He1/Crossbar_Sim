@@ -38,4 +38,5 @@ if __name__ == '__main__':
 
     ideal_out = np.loadtxt('../rf_app_data/output_for_calib_sin.csv', delimiter=',')
 
-    ideal_float = (float_out_all == ideal_out)
+    # ideal_float = (float_out_all == ideal_out)
+    print('diff average: ', np.mean(np.abs(float_out_all - ideal_out)))
