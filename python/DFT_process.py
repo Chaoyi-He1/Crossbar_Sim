@@ -64,6 +64,6 @@ if __name__ == '__main__':
     # data = pd.read_csv('data/VMM_post_processed_data.csv')
     # data = data.to_numpy()
 
-    dft_mtx = DFT_mtx_create(16,16)
+    dft_mtx = DFT_mtx_create(16, 16)
     plot_array(dft_mtx)
     # Extract the data fro
