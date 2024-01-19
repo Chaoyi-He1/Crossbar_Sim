@@ -2,15 +2,15 @@ import numpy as np
 import sys
 # sys.path.append('./Crossbar_Sim/python')
 
-from python.VMM_sim import Quantize_VMM
-from python.VMM_sim import Deduct_VM
-from python.visualize import plot_array
-from python.VMM_post_process import *
+from VMM_sim import Quantize_VMM
+from VMM_sim import Deduct_VM
+from visualize import plot_array
+from VMM_post_process import *
 
 
 if __name__ == '__main__':
-    float_weight_all = np.loadtxt('../rf_app_data/matrix_for_calib_sin.csv', delimiter=',')
-    float_in_all = np.loadtxt('../rf_app_data/input_for_calib_sin.csv', delimiter=',')
+    float_weight_all = np.loadtxt('/data/chaoyi_he/Crossbar_Sim/data/matrix_for_calib_sin.csv', delimiter=',')
+    float_in_all = np.loadtxt('/data/chaoyi_he/Crossbar_Sim/data/input_for_calib_sin.csv', delimiter=',')
     float_in_1 = np.zeros((1000, 128))
     float_in_2 = np.zeros((1000, 128))
     float_weight_1 = np.zeros((128, 256))
@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     float_out_all = np.concatenate([out_part_1,out_part_2],axis=0)
 
-    ideal_out = np.loadtxt('../rf_app_data/output_for_calib_sin.csv', delimiter=',')
+    ideal_out = np.loadtxt('/data/chaoyi_he/Crossbar_Sim/data/output_for_calib_sin.csv', delimiter=',')
 
     # ideal_float = (float_out_all == ideal_out)
     print('diff average: ', np.mean(np.abs(float_out_all - ideal_out)))
