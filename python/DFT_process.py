@@ -15,6 +15,15 @@ The ourput matrix will be of size 2N x 2M,
 where the [0:N, 0:M] matrix is the real part, and the [N:2N, M:2M] matrix is the imaginary part.
 '''
 def DFT_mtx_create(N, M):
+    '''
+    Parameters:
+        N: number of samples
+        M: number of frequencies
+    Returns:
+        DFT_mtx_out: DFT matrix of size 2N x 2M, 
+                     where the [0:N, 0:M] matrix is the real part, 
+                     and the [N:2N, M:2M] matrix is the imaginary part.
+    '''
     n = np.arange(N)
     m = np.arange(M)
     nm = np.outer(n, m)
@@ -26,6 +35,22 @@ def DFT_mtx_create(N, M):
     DFT_mtx_out = np.vstack((DFT_mtx_out, np.hstack((np.zeros((N, M)), np.imag(DFT_mtx)))))
     
     return DFT_mtx_out
+
+
+'''
+This function is to regroup the output of the DFT VMM into a complex array.
+the first half of the output is the real part, and the second half is the imaginary part.
+'''
+def regroup_complex(input):
+    '''
+    Parameters:
+        input: the output of the DFT VMM
+    Returns:
+        output: the regrouped complex array
+    '''
+    _, in_dim = input.shape
+    output = input[:, 0:in_dim//2] + input[:, in_dim//2:] * 1j
+    return output
 
 
 def complex_vmm_to_vmm(input, weight):
