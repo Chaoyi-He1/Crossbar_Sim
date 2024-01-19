@@ -3,8 +3,9 @@ import pandas as pd
 import os
 import math
 import matplotlib.pyplot as plt
-from python.VMM_post_process import *
-
+from VMM_sim import *
+from VMM_post_process import *
+from visualize import plot_array
 
 '''
 This function creates a DFT matrix of size N x M,
@@ -26,11 +27,41 @@ def DFT_mtx_create(N, M):
     
     return DFT_mtx_out
 
+def complex_vmm_to_vmm(input,weight):
+    no_batch,in_dim = input.shape
+    in_whole = np.zeros((2*no_batch,2*in_dim))
+    in_whole[0:no_batch,0:in_dim] = np.real(input)
+    in_whole[0:no_batch,in_dim:2*in_dim] = np.real(input)
+    in_whole[no_batch:2*no_batch,0:in_dim] = np.imag(input)
+    in_whole[no_batch:2*no_batch,in_dim:2*in_dim] = np.imag(input)
+
+    rows, cols = weight.shape
+    w_array = np.zeros((2*rows,2*cols))
+    w_array[0:rows,0:cols] = np.real(weight)
+    w_array[rows:, cols:] = np.imag(weight)
+
+    whole_out = np.dot(in_whole,w_array)
+    out_real = whole_out[0:no_batch,0:cols] - whole_out[no_batch:,cols:]
+    out_imag = whole_out[no_batch:,0:cols] + whole_out[0:no_batch,cols:]
+
+    return in_whole, w_array
+
+def vmm_out_to_complex(input,weight,whole_out):
+    no_batch, in_dim = input.shape
+    rows, cols = weight.shape
+    out_real = whole_out[0:no_batch,0:cols] - whole_out[no_batch:,cols:]
+    out_imag = whole_out[no_batch:,0:cols] + whole_out[0:no_batch,cols:]
+    ideal_out = np.dot(input,weight)
+    vmm_out = out_real + out_imag*1j
+    return ideal_out,vmm_out
+
 
 if __name__ == '__main__':
     # Read the data from the VMM post-processed data file.
     # The data is in the form of a pandas DataFrame.
-    data = pd.read_csv('data/VMM_post_processed_data.csv')
-    data = data.to_numpy()
-    
+    # data = pd.read_csv('data/VMM_post_processed_data.csv')
+    # data = data.to_numpy()
+
+    dft_mtx = DFT_mtx_create(16,16)
+    plot_array(dft_mtx)
     # Extract the data fro
