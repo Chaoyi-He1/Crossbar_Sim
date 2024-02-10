@@ -6,5 +6,7 @@ from visualize import plot_array
 from VMM_post_process import *
 
 
+'''
+'''
 def VMM_with_multi_XB():
     pass 
