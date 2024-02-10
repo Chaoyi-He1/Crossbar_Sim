@@ -1,12 +1,11 @@
 import numpy as np
 
+
 '''
 The function takes an input voltage vector and conductance matrix,
 together with voltage and conductance quantization ranges, and
 returns the VMM output vector requantized to the specified ranges [0, 255]
 '''
-
-
 def Quantize_VMM(voltages, conductances, v_range, g_range):
     '''
     Parameters:
