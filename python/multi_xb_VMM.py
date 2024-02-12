@@ -98,6 +98,8 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
     input_interval_widths = np.zeros((num_xbars, voltages.shape[0], 1))
     
     qtz_output = np.zeros((num_xbars, voltages.shape[0], conductances.shape[1]))
+    max_out = np.zeros(num_xbars, voltages.shape[0], 1)
+    min_out = np.zeros(num_xbars, voltages.shape[0], 1)
     
     for i in range(num_xbars):
         (qtz_input[i, :, :], 
@@ -107,13 +109,13 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
         
         # Compute the output vector and quantize it to the range [0, 255]
         out = np.matmul(qtz_input[i, :, :], qtz_conductances)
-        min_out = np.min(out, axis=1, keepdims=True)
-        max_out = np.max(out, axis=1, keepdims=True)
+        min_out[i, :, :] = np.min(out, axis=1, keepdims=True)
+        max_out[i, :, :] = np.max(out, axis=1, keepdims=True)
         
         codes_out = np.arange(0, 256, dtype=int)
         qtz_output[i, :, :] = codes_out[
             np.clip(
-                np.floor((out - min_out) / (max_out - min_out) * 255).astype(int), 
+                np.floor((out - min_out[i, :, :]) / (max_out[i, :, :] - min_out[i, :, :]) * 255).astype(int), 
                 0, 255)]
     
     # Compute a, b, c, d
@@ -122,4 +124,4 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
     c = (g_range[1] - g_range[0]) / (max_g - min_g)
     d = g_range[0] - c * min_g
     
-    return qtz_output, a, b, c, d
+    return qtz_output, a, b, c, d, max_out, min_out, qtz_input, qtz_input_index, input_interval_widths, qtz_conductances
