@@ -18,8 +18,8 @@ def Quantize_input(input_vectors, v_range, num_intervals=16):
     codes = np.linspace(v_range[0], v_range[1], num_intervals, endpoint=False, dtype=int)
     
     # Compute min and max for each vector
-    min_vals = np.min(input_vectors, axis=1, keepdims=True)
-    max_vals = np.max(input_vectors, axis=1, keepdims=True)
+    min_vals = np.min(input_vectors)
+    max_vals = np.max(input_vectors)
     
     # Calculate interval widths for each vector
     interval_widths = (max_vals - min_vals) / num_intervals
@@ -32,9 +32,9 @@ def Quantize_input(input_vectors, v_range, num_intervals=16):
     scaled_indices = np.clip(scaled_indices, 0, num_intervals - 1)
     
     # Map indices to quantized voltage values
-    quantized_vectors = codes[scaled_indices]
+    quantized_lvs = codes[scaled_indices]
     
-    return quantized_vectors, scaled_indices, interval_widths
+    return quantized_lvs, scaled_indices, interval_widths
 
 
 '''
@@ -80,48 +80,53 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
         max_out: the maximum value of each output matrix, the size is (num_xbars, )
         min_out: the minimum value of each output matrix, the size is (num_xbars, )
     '''
-    max_v = np.max(voltages, axis=1, keepdims=True)
-    min_v = np.min(voltages, axis=1, keepdims=True)
+    
+    # Quantize the conductances to integers in the range "g_range" column-wise
     min_g = np.min(conductances, axis=0, keepdims=True)
     max_g = np.max(conductances, axis=0, keepdims=True)
     
-    # Quantize the conductances to integers in the range "g_range" column-wise
     codes_g = np.arange(g_range[0], g_range[1] + 1, dtype=int)
     qtz_conductances = codes_g[
         np.clip(
             np.floor((conductances - min_g) / (max_g - min_g) * len(codes_g)).astype(int), 
             0, len(codes_g) - 1)]
     
+    # Compute c, d
+    c = (g_range[1] - g_range[0]) / (max_g - min_g)
+    d = g_range[0] - c * min_g
+    
     # Quantize the voltages to integers in the range "v_range" by num_xbars crossbars
     qtz_input = np.zeros((num_xbars, voltages.shape[0], conductances.shape[1]))
     qtz_input_index = np.zeros((num_xbars, voltages.shape[0], voltages.shape[1]))
-    input_interval_widths = np.zeros((num_xbars, voltages.shape[0], 1))
+    input_interval_widths = np.zeros((num_xbars, 1))
     
     qtz_output = np.zeros((num_xbars, voltages.shape[0], conductances.shape[1]))
-    max_out = np.zeros(num_xbars, voltages.shape[0], 1)
-    min_out = np.zeros(num_xbars, voltages.shape[0], 1)
+    max_out = np.zeros(num_xbars, 1)
+    min_out = np.zeros(num_xbars, 1)
+    a, b = np.zeros((num_xbars, 1)), np.zeros((num_xbars, 1))
     
     for i in range(num_xbars):
+        # Compute a, b
+        max_v = np.max(voltages)
+        min_v = np.min(voltages)
+        a[i, :] = (v_range[1] - v_range[0]) / (max_v - min_v)
+        b[i, :] = v_range[0] - a[i, :] * min_v
+        
         (qtz_input[i, :, :], 
-        qtz_input_index[i, :, :], 
-        input_interval_widths[i, :, :]) = Quantize_input(voltages, v_range, num_steps)
+         qtz_input_index[i, :, :], 
+         input_interval_widths[i, :]) = Quantize_input(voltages, v_range, num_steps)
+        
         voltages = voltages - input_interval_widths[i, :, :] * qtz_input_index[i, :, :]
         
         # Compute the output vector and quantize it to the range [0, 255]
         out = np.matmul(qtz_input[i, :, :], qtz_conductances)
-        min_out[i, :, :] = np.min(out, axis=1, keepdims=True)
-        max_out[i, :, :] = np.max(out, axis=1, keepdims=True)
+        min_out[i, :], max_out[i, :] = np.min(out), np.max(out)
         
         codes_out = np.arange(0, 256, dtype=int)
         qtz_output[i, :, :] = codes_out[
             np.clip(
-                np.floor((out - min_out[i, :, :]) / (max_out[i, :, :] - min_out[i, :, :]) * 255).astype(int), 
+                np.floor((out - min_out[i, :]) / (max_out[i, :] - min_out[i, :]) * 255).astype(int), 
                 0, 255)]
     
-    # Compute a, b, c, d
-    a = (v_range[1] - v_range[0]) / (max_v - min_v)
-    b = v_range[0] - a * min_v
-    c = (g_range[1] - g_range[0]) / (max_g - min_g)
-    d = g_range[0] - c * min_g
-    
     return qtz_output, a, b, c, d, max_out, min_out, qtz_input, qtz_input_index, input_interval_widths, qtz_conductances
+
