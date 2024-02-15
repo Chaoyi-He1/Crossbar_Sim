@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # Plot the scatter plot of ideal quantized output for each column
     ax = fig.add_subplot(2, 1, 1)
     columns = np.stack([np.arange(ideal_qtz_output.shape[1])] * ideal_qtz_output.shape[0], axis=0).flatten()
-    ax.scatter(columns, ideal_qtz_output.flatten(), s=1)
+    ax.scatter(range(1600), ideal_qtz_output[:, 0], s=1)
     ax.set_title('Ideal quantized output')
     ax.set_xlabel('Channel')
     ax.set_ylabel('Quantized output')
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # Plot the scatter plot of NPU quantized output for each column
     ax = fig.add_subplot(2, 1, 2)
     columns = np.stack([np.arange(ideal_qtz_output.shape[1])] * ideal_qtz_output.shape[0], axis=0).flatten()
-    ax.scatter(columns, npu_qtz_output.flatten(), s=1)
+    ax.scatter(range(1600), npu_qtz_output[:, 0], s=1)
     ax.set_title('NPU quantized output')
     ax.set_xlabel('Channel')
     ax.set_ylabel('Quantized output')
