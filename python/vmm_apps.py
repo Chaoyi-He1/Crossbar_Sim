@@ -2,18 +2,18 @@ import numpy as np
 import sys
 # sys.path.append('./Crossbar_Sim/python')
 
-from python.VMM_sim import Quantize_VMM
-from python.VMM_sim import Deduct_VM
-from python.visualize import plot_array
-from python.VMM_post_process import *
+from VMM_sim import Quantize_VMM
+from VMM_sim import Deduct_VM
+from visualize import plot_array
+from VMM_post_process import *
 
 # from flow_file_generate import file_generate
 
 if __name__ == '__main__':
 
     # Load the float point data
-    float_weight = np.load('../data/float_weight_example.npy')
-    float_in = np.load('../data/float_in_example.npy')
+    float_weight = np.load('/data/chaoyi_he/Crossbar_Sim/data/Calib/uniform_weight.npy')
+    float_in = np.load('./data/Calib/ideal_out_xb_uniform_mid_g.npy')
     float_out = np.dot(float_in, float_weight)
 
     # Assign the voltage range and conductance range
