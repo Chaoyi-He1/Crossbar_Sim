@@ -96,13 +96,13 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
     d = g_range[0] - c * min_g
     
     # Quantize the voltages to integers in the range "v_range" by num_xbars crossbars
-    qtz_input = np.zeros((num_xbars, voltages.shape[0], conductances.shape[1]))
+    qtz_input = np.zeros((num_xbars, voltages.shape[0], voltages.shape[1]))
     qtz_input_index = np.zeros((num_xbars, voltages.shape[0], voltages.shape[1]))
     input_interval_widths = np.zeros((num_xbars, 1))
     
     qtz_output = np.zeros((num_xbars, voltages.shape[0], conductances.shape[1]))
-    max_out = np.zeros(num_xbars, 1)
-    min_out = np.zeros(num_xbars, 1)
+    max_out = np.zeros((num_xbars, 1))
+    min_out = np.zeros((num_xbars, 1))
     a, b = np.zeros((num_xbars, 1)), np.zeros((num_xbars, 1))
     
     for i in range(num_xbars):
@@ -131,3 +131,49 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
     return qtz_output, a, b, c, d, max_out, min_out, qtz_input, qtz_input_index, input_interval_widths, qtz_conductances
 
 
+if __name__ == '__main__':
+    # Example usage
+    # Input
+    voltages = np.reshape(np.arange(0, 16, 0.1), (-1, 5))
+    conductances = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9], [1.0, 1.1, 1.2], [1.3, 1.4, 1.5]])
+    v_range = np.array([0, 255])
+    g_range = np.array([0, 255])
+    num_xbars = 3
+    num_steps = 16
+    
+    # VMM with multiple crossbars
+    qtz_output, a, b, c, d, max_out, min_out, qtz_input, qtz_input_index, input_interval_widths, qtz_conductances = VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_steps)
+    
+    # Print the results
+    print('Quantized output:')
+    print(qtz_output)
+    print('a:')
+    print(a)
+    print('b:')
+    print(b)
+    print('c:')
+    print(c)
+    print('d:')
+    print(d)
+    print('max_out:')
+    print(max_out)
+    print('min_out:')
+    print(min_out)
+    print('Quantized input:')
+    print(qtz_input)
+    print('Quantized input index:')
+    print(qtz_input_index)
+    print('Input interval widths:')
+    print(input_interval_widths)
+    print('Quantized conductances:')
+    print(qtz_conductances)
+    
+    # Visualize the results
+    plot_array(qtz_output[0, :, :])
+    plot_array(qtz_output[1, :, :])
+    plot_array(qtz_output[2, :, :])
+    plot_array(qtz_input[0, :, :])
+    plot_array(qtz_input[1, :, :])
+    plot_array(qtz_input_index[0, :, :])
+    plot_array(qtz_input_index[1, :, :])
+    plot_array(input_interval_widths)
