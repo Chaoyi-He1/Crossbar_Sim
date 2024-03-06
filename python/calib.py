@@ -1,34 +1,18 @@
-import os
-import scipy.io as sio
-import h5py
-import torch
 import numpy as np
-import pandas as pd
 from torch.utils.data import Dataset
 from torch.utils.data import random_split
-from typing import Tuple
-from tqdm import tqdm
-
 from typing import Optional, Tuple, List, Iterable
-from torch import nn, Tensor
 import math
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-import sys
 import torch.distributed as dist
-import glob
 import os
 import random
-import subprocess
 import time
 from collections import defaultdict, deque
 import datetime
-import pickle
-from contextlib import contextmanager
 from torch.utils.tensorboard import SummaryWriter
-import scipy.io
-import matplotlib.pyplot as plt
 
 
 def is_dist_avail_and_initialized():
@@ -256,7 +240,7 @@ class XB_dataset_npy(Dataset):
         Matrix, Iout, ideal_Iout = list(zip(*batch))
         Matrix = torch.from_numpy(np.stack(Matrix, 0)).float()
         Iout = torch.from_numpy(np.stack(Iout, 0)).float()
-        ideal_Iout = torch.from_numpy(np.stack(ideal_Iout, 0)).long()
+        ideal_Iout = torch.from_numpy(np.stack(ideal_Iout, 0)).float()
         return Matrix, Iout, ideal_Iout
 
 
@@ -284,13 +268,12 @@ class Calib_model(nn.Module):
         self.conv = nn.Conv2d(in_channels=2, out_channels=ctx_dim,
                               kernel_size=(16, 32))
         self.MLP = nn.ModuleList([
-            ConcatSquashLinear(32, 128, ctx_dim)
+            ConcatSquashLinear(32, 512, ctx_dim)
         ])
-        self.MLP.extend([
-                            ConcatSquashLinear(128, 128, ctx_dim)
-                        ] * 4)
-        self.cls_head = nn.ModuleList([ConcatSquashLinear(128, 256, ctx_dim)] * 32) if out_type == "cls" else \
-            ConcatSquashLinear(128, 32, ctx_dim)
+        self.MLP.extend([ConcatSquashLinear(512, 512, ctx_dim)
+                         ] * 4)
+        self.cls_head = nn.ModuleList([ConcatSquashLinear(512, 256, ctx_dim)] * 32) if out_type == "cls" else \
+            ConcatSquashLinear(512, 32, ctx_dim)
         self.out_type = out_type
 
     def forward(self, mtx, exp_Iout):
@@ -298,6 +281,7 @@ class Calib_model(nn.Module):
         ideal_Iout = exp_Iout
         for layer in self.MLP:
             ideal_Iout = layer(ctx, ideal_Iout)
+            ideal_Iout = F.relu(ideal_Iout)
         pred = torch.stack([layer(ctx, ideal_Iout) for layer in self.cls_head], dim=1).to(
             mtx.device) if self.out_type == "cls" else \
             self.cls_head(ctx, ideal_Iout)
@@ -380,14 +364,14 @@ def evaluation(model: torch.nn.Module, data_loader: Iterable,
 
 def main():
     float_mtx_path = '../data/Calib/uniform_weight.npy'
-    mtx_path = ['../data/Calib/qtz_mtx_xb_uniform.npy',
-                '../data/Calib/qtz_mtx_xb_uniform_bit_norm.npy',
+    mtx_path = [# '../data/Calib/qtz_mtx_xb_uniform.npy',
+                # '../data/Calib/qtz_mtx_xb_uniform_bit_norm.npy',
                 '../data/Calib/qtz_mtx_xb_uniform_mid_g.npy']
-    ideal_out_I_path = ['../data/Calib/ideal_out_xb_uniform.npy',
-                        '../data/Calib/ideal_out_xb_uniform_bit_norm.npy',
+    ideal_out_I_path = [# '../data/Calib/ideal_out_xb_uniform.npy',
+                        # '../data/Calib/ideal_out_xb_uniform_bit_norm.npy',
                         '../data/Calib/ideal_out_xb_uniform_mid_g.npy']
-    out_I_path = ['../data/Calib/xb_out_xb_uniform.npy',
-                  '../data/Calib/xb_out_xb_uniform_bit_norm.npy',
+    out_I_path = [# '../data/Calib/xb_out_xb_uniform.npy',
+                  # '../data/Calib/xb_out_xb_uniform_bit_norm.npy',
                   '../data/Calib/xb_out_xb_uniform_mid_g.npy']
 
     device = torch.device('cuda')
@@ -397,7 +381,7 @@ def main():
         print("CUDA is not available")
     batch_size = 32
     seed = 42
-    epochs = 50
+    epochs = 100
     lr = 1e-4
     lrf = 0.01
     reg_lambda = 0.6
@@ -435,10 +419,10 @@ def main():
     model = Calib_model(256, out_type)
     model.to(device)
 
-    tb_writer.add_graph(model, (torch.randn((batch_size, 2, 16, 32),
+    tb_writer.add_graph(model, [torch.randn((batch_size, 2, 16, 32),
                                             device=device, dtype=torch.float),
                                 torch.randn((batch_size, 32),
-                                            device=device, dtype=torch.float)),
+                                            device=device, dtype=torch.float)],
                         use_strict_trace=False)
 
     start_epoch = 0
@@ -455,8 +439,6 @@ def main():
     lf = lambda x: ((1 + math.cos(x * math.pi / epochs)) / 2) * (1 - lrf) + lrf
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     scheduler.last_epoch = start_epoch
-
-    # criterion = nn.BCEWithLogitsLoss()
 
     print("Start training...")
     start_time = time.time()
