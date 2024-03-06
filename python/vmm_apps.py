@@ -13,7 +13,7 @@ if __name__ == '__main__':
 
     # Load the float point data
     float_weight = np.load('/data/chaoyi_he/Crossbar_Sim/data/Calib/uniform_weight.npy')
-    float_in = np.load('./data/Calib/ideal_out_xb_uniform_mid_g.npy')
+    float_in = np.load('./data/Calib/xb_out_xb_uniform_bit_norm.npy')
     float_out = np.dot(float_in, float_weight)
 
     # Assign the voltage range and conductance range
