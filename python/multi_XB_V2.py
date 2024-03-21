@@ -3,7 +3,7 @@ import sys
 from visualize import plot_array
 
 
-def residue_coefficients(residue_mtx, g_range):
+def residue_coefficients(residue_mtx, g_range, total_xb_num):
     '''
     The residue_mtx is the residue between the target conductance matrix and the sum of the conductance matrices of the previous levels
         residue_mtx = target_conductance_matrix - sum(residue_coefficients[i] * real_conductance_matrices[i]) for i in previous levels
@@ -17,11 +17,14 @@ def residue_coefficients(residue_mtx, g_range):
             3.2 if the abs value of residue_mtx[i, j] < g_range[0], the residue_coefficient[i, j] = floor(abs(residue_mtx[i, j])/g_range[0]) * sign(residue_mtx[i, j])
         4. if the residue_mtx is within the range of g_range, the residue_coefficient is +-1, based on the sign of the residue_mtx
     '''
+    total_round_digit = 10 ** total_xb_num
     residue_coefficient = np.zeros(residue_mtx.shape)
     residue_sign = np.sign(residue_mtx)
     residue_abs = np.abs(residue_mtx)
-    residue_coefficient[residue_abs < g_range[0]] = residue_sign[residue_abs < g_range[0]] * np.floor(residue_abs[residue_abs < g_range[0]] / g_range[0])
-    residue_coefficient[residue_abs > g_range[1]] = residue_sign[residue_abs > g_range[1]] / np.ceil(residue_abs[residue_abs > g_range[1]] / g_range[1])
+    residue_coefficient[residue_abs < g_range[0]] = residue_sign[residue_abs < g_range[0]] * \
+                                                    np.floor(residue_abs[residue_abs < g_range[0]] / g_range[0] * total_round_digit) / total_round_digit
+    residue_coefficient[residue_abs > g_range[1]] = residue_sign[residue_abs > g_range[1]] / \
+                                                    np.ceil(residue_abs[residue_abs > g_range[1]] / g_range[1] * total_round_digit) / total_round_digit
     residue_coefficient[(residue_abs >= g_range[0]) & (residue_abs <= g_range[1])] = residue_sign[(residue_abs >= g_range[0]) & (residue_abs <= g_range[1])]
     residue_coefficient[residue_abs < g_range[0] / 1000] = 1
     return residue_coefficient
