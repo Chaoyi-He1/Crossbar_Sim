@@ -74,5 +74,3 @@ def Quantize_mtx(input_mtx, g_range, num_levels=16):
     quantized_mtx = codes[scaled_indices]
     
     return quantized_mtx, scaled_indices, interval_widths
-
-
