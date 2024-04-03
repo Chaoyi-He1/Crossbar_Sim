@@ -2,6 +2,7 @@ import numpy as np
 import sys
 from visualize import plot_array
 from VMM_sim import Quantize_VMM, Deduct_VM
+import matplotlib.pyplot as plt
 
 
 def Quantize_input(input_vectors, v_range, num_intervals=16):
@@ -108,6 +109,7 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
     min_out = np.zeros((num_xbars + 1, 1))
     a, b = np.zeros((num_xbars, 1)), np.zeros((num_xbars, 1))
     
+    voltages = voltages - total_min_v
     for i in range(num_xbars):
         # Compute a, b
         max_v = np.max(voltages)
@@ -139,8 +141,8 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
     
     # Compute the VMM for the total_min_v uniform vector and put it in the last crossbar
     i = num_xbars
-    total_min_v_qtz_vec = np.ones(1, voltages.shape[2]) * v_range[0]
-    total_min_v_vec = np.ones(1, voltages.shape[2]) * total_min_v
+    total_min_v_qtz_vec = np.ones((1, voltages.shape[1])) * v_range[0]
+    total_min_v_vec = np.ones((1, voltages.shape[1])) * total_min_v
     out = np.matmul(total_min_v_qtz_vec, qtz_conductances)
     min_out[i, :], max_out[i, :] = np.min(out), np.max(out)
     
@@ -189,47 +191,45 @@ def Reconstruct_output(qtz_input, qtz_input_index, input_interval_widths, total_
 
 if __name__ == '__main__':
     # Example usage
-    # Input
-    voltages = np.reshape(np.arange(0, 16, 0.1), (-1, 5))
-    conductances = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9], [1.0, 1.1, 1.2], [1.3, 1.4, 1.5]])
-    v_range = np.array([0, 255])
-    g_range = np.array([0, 255])
+    # Input, random generate voltages in a given range
+    voltages = np.random.uniform(-1, 1, (5, 5))
+    conductances = np.random.uniform(-1, 1, (5, 3))     # np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9], [1.0, 1.1, 1.2], [1.3, 1.4, 1.5]])
+    float_output = np.matmul(voltages, conductances)
+    
+    v_range = np.array([50, 240])
+    g_range = np.array([50, 230])
     num_xbars = 3
     num_steps = 16
     
     # VMM with multiple crossbars
-    qtz_output, a, b, c, d, max_out, min_out, qtz_input, qtz_input_index, input_interval_widths, qtz_conductances = VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_steps)
+    (qtz_input, qtz_input_index, input_interval_widths, \
+     qtz_conductances, total_min_v,\
+     qtz_output, qtz_output_deduct) = VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_steps)
     
-    # Print the results
-    print('Quantized output:')
-    print(qtz_output)
-    print('a:')
-    print(a)
-    print('b:')
-    print(b)
-    print('c:')
-    print(c)
-    print('d:')
-    print(d)
-    print('max_out:')
-    print(max_out)
-    print('min_out:')
-    print(min_out)
-    print('Quantized input:')
-    print(qtz_input)
-    print('Quantized input index:')
-    print(qtz_input_index)
-    print('Input interval widths:')
-    print(input_interval_widths)
-    print('Quantized conductances:')
-    print(qtz_conductances)
+    recover_input, recover_output = Reconstruct_output(qtz_input, qtz_input_index, input_interval_widths, total_min_v, qtz_output)
     
-    # Visualize the results
-    plot_array(qtz_output[0, :, :])
-    plot_array(qtz_output[1, :, :])
-    plot_array(qtz_output[2, :, :])
-    plot_array(qtz_input[0, :, :])
-    plot_array(qtz_input[1, :, :])
-    plot_array(qtz_input_index[0, :, :])
-    plot_array(qtz_input_index[1, :, :])
-    plot_array(input_interval_widths)
+    # Plot float VMM output and reconstructed output in different subplots
+    row_to_plot = 0
+    
+    fig = plt.figure()
+    ax1 = fig.add_subplot(211)
+    ax1.plot(np.arange(recover_output.shape[1]), recover_output[row_to_plot], 'r', label='Reconstructed Output')
+    plt.legend()
+    plt.grid(True)
+    
+    ax2 = fig.add_subplot(212)
+    ax2.plot(np.arange(float_output.shape[1]), float_output[row_to_plot], 'b', label='Float Output')
+    #save the figure
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('results/VMM_with_multi_XB.png')
+    
+    # Plot the float input and reconstructed input in a single plot
+    fig = plt.figure()
+    plt.plot(np.arange(recover_input.shape[1]), recover_input[row_to_plot], 'r', label='Reconstructed Input')
+    plt.plot(np.arange(voltages.shape[1]), voltages[row_to_plot], 'b', label='Float Input')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('results/Input_reconstruction.png')
+    print("Done")
+    
