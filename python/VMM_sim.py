@@ -106,8 +106,11 @@ def Deduct_VM(out, a, b, c, d, max_range, min_range, V, M):
     min_out = np.min(out)
     max_out = np.max(out)
     out = np.round((out - min_out) / (max_out - min_out) * 255)
+    # Calculate rescale factor and bias
+    rescale_factor = (max_out - min_out) / 255
+    rescale_bias = min_out
 
-    return out
+    return out, rescale_factor, rescale_bias
 
 
 '''
