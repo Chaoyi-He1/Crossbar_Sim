@@ -80,6 +80,7 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
         max_out: the maximum value of each output matrix, the size is (num_xbars, )
         min_out: the minimum value of each output matrix, the size is (num_xbars, )
     '''
+    use_float_bias = False
     total_min_v = np.min(voltages)
     
     # Quantize the conductances to integers in the range "g_range" column-wise
@@ -154,13 +155,22 @@ def VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_s
         np.clip(
             np.floor((out - min_out[i, :]) / (max_out[i, :] - min_out[i, :]) * 255).astype(int), 
             0, 255)]
-    a[i, :], b[i, :] = 1, v_range[0] - total_min_v
+    a[i, :], b[i, :] = v_range[0] / total_min_v, 0
     (qtz_output_deduct[i, :, :],
      rescale_factor[i, :], rescale_bias[i, :]) = Deduct_VM(qtz_output[i, :, :], 
                                                            a[i, :], b[i, :], c, d, 
                                                            max_out[i, :], min_out[i, :], 
-                                                           total_min_v_qtz_vec, 
+                                                           total_min_v_vec, 
                                                            conductances)
+    
+    if use_float_bias:
+        current_float_output = float_output[i, :, :]
+        min_out, max_out = np.min(current_float_output), np.max(current_float_output)
+        codes_out = np.arange(0, 256, dtype=int)
+        qtz_output_deduct[i, :, :] = codes_out[
+            np.clip(
+                np.floor((current_float_output - min_out) / (max_out - min_out) * 255).astype(int), 
+                0, 255)]
     
     return qtz_input, qtz_input_index, input_interval_widths, \
            qtz_conductances, total_min_v, a, c, rescale_factor, rescale_bias, \
@@ -184,18 +194,17 @@ def Reconstruct_output(qtz_input, qtz_input_index, input_interval_widths,
         recover_input: the reconstructed input voltage vectors (Nxl)
         recover_output: the reconstructed output vector (Nxm)
     '''
-    num_xbars = qtz_input.shape[0]
+    num_xbars = qtz_output.shape[0]
     recover_input = np.sum(qtz_input_index * input_interval_widths.reshape(-1, 1, 1), axis=0) + total_min_v
     
     recover_output = np.zeros(qtz_output.shape[1:])
     for i in range(num_xbars):
-        recover_output += (qtz_output[i, :, :] * rescale_factor[i, :] + rescale_bias[i, :]) / (a[i] * c)
-    # recover_output += (qtz_output[-1, :, :] * rescale_factor[-1, :] + rescale_bias[-1, :]) / c
+        recover_output += (qtz_output[i, :, :] * rescale_factor[i, :] + rescale_bias[i, :]) / (a[i] * c)    #  * rescale_factor[i, :] + rescale_bias[i, :]
     
     return recover_input, recover_output
 
 
-def Compare_qtz_with_flout_out(qtz_output, float_output, c):
+def Compare_qtz_with_flout_out(qtz_output, float_output, a, c, rescale_factor, rescale_bias):
     '''
     Parameters:
         qtz_output: quantized output vector (Nxm), where N is the number of vectors and m is the output vector length
@@ -204,11 +213,24 @@ def Compare_qtz_with_flout_out(qtz_output, float_output, c):
     Returns:
         qtz_output: quantized output vector (Nxm), where N is the number of vectors and m is the output vector length
     '''
+    bias = True
     num_xbars = qtz_output.shape[0]
     qtz_outs = np.zeros((num_xbars, qtz_output.shape[1], qtz_output.shape[2]))
+    float_output_sum = np.zeros(float_output.shape[1:])
+    qtz_output_sum = np.zeros(qtz_output.shape[1:])
     for i in range(num_xbars):
-        current_qtz_output = qtz_output[i, :, :] / c
+        if not bias and i == num_xbars - 1:
+            continue
+        current_qtz_output = qtz_output[i, :, :]
+        current_qtz_output = current_qtz_output * rescale_factor[i, :]
+        current_qtz_output = current_qtz_output + rescale_bias[i, :]
+        current_qtz_output = current_qtz_output / (c * a[i])
+        
         current_float_output = float_output[i, :, :]
+        
+        float_output_sum += current_float_output
+        qtz_output_sum += current_qtz_output
+        
         # Compute the qtz output of the current float output
         min_out, max_out = np.min(current_float_output), np.max(current_float_output)
         codes_out = np.arange(0, 256, dtype=int)
@@ -216,8 +238,7 @@ def Compare_qtz_with_flout_out(qtz_output, float_output, c):
             np.clip(
                 np.floor((current_float_output - min_out) / (max_out - min_out) * 255).astype(int), 
                 0, 255)]
-        # Compare the "current_qtz_output" with "qtz_out"
-        # assert np.allclose(current_qtz_output, qtz_out), "The quantized output is not correct"
+        
         qtz_outs[i, :, :] = qtz_out
         # Plot the current_float_output and current_qtz_output and qtz_out in 3 subplots
         fig = plt.figure()
@@ -236,6 +257,32 @@ def Compare_qtz_with_flout_out(qtz_output, float_output, c):
         plt.legend()
         plt.grid(True)
         plt.savefig('results/Quantized_output_comparison.png')
+    
+    # Compute the qtz output of the total float output
+    min_out, max_out = np.min(float_output_sum), np.max(float_output_sum)
+    codes_out = np.arange(0, 256, dtype=int)
+    qtz_out = codes_out[
+        np.clip(
+            np.floor((float_output_sum - min_out) / (max_out - min_out) * 255).astype(int), 
+            0, 255)]
+    
+    # Plot the float_output_sum and qtz_output_sum and qtz_out in 3 subplots
+    fig = plt.figure()
+    ax1 = fig.add_subplot(311)
+    ax1.plot(np.arange(float_output_sum.shape[1]), float_output_sum[0], 'r', label='Float Output Sum')
+    plt.legend()
+    plt.grid(True)
+    
+    ax2 = fig.add_subplot(312)
+    ax2.plot(np.arange(qtz_output_sum.shape[1]), qtz_output_sum[0], 'b', label='Quantized Output Sum')
+    plt.legend()
+    plt.grid(True)
+    
+    ax3 = fig.add_subplot(313)
+    ax3.plot(np.arange(qtz_out.shape[1]), qtz_out[0], 'g', label='Quantized Output from float')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('results/Quantized_output_sum_comparison.png')
         
     return qtz_outs
 
@@ -257,7 +304,7 @@ if __name__ == '__main__':
      qtz_conductances, total_min_v, a, c, rescale_factor, rescale_bias,\
      qtz_output, qtz_output_deduct, float_outputs) = VMM_with_multi_XB(voltages, conductances, v_range, g_range, num_xbars, num_steps)
     
-    true_qtz_out = Compare_qtz_with_flout_out(qtz_output_deduct, float_outputs, c)
+    true_qtz_out = Compare_qtz_with_flout_out(qtz_output_deduct, float_outputs, a, c, rescale_factor, rescale_bias)
     
     recover_input, recover_output = Reconstruct_output(qtz_input, qtz_input_index, input_interval_widths, 
                                                        total_min_v, qtz_output_deduct, a, c, rescale_factor, rescale_bias)
