@@ -9,14 +9,20 @@ from multi_xb_VMM import *
 
 
 if __name__ == "__main__":
-    folder = "./data/test_data_dft_04_15/"
-    recover_output = 'xb_recover_output_3_input_3_sin_40.npy'
-    ideal_output = 'ideal_recover_output_3_input_3_sin_40.npy'
+    folder = "./data/test_data_dft_04_18/"
+    recover_output = 'xb_recover_output_3_input_3_sin_40_100_rep_first_10.npy'
+    ideal_output = 'ideal_recover_output_3_input_3_sin_40_100_rep_first_10.npy'
     
     recover_output = np.load(os.path.join(folder, recover_output))
     ideal_output = np.load(os.path.join(folder, ideal_output))
+    # sample 10 rows for every 100 rows
+    recover_output_resample = []
+    for i in range(10):
+        random_index = np.random.randint(0, 100, 10) + i * 100
+        recover_output_resample.append(recover_output[random_index, :])
+    recover_output_resample = np.vstack(recover_output_resample)
     
-    recover_output_avg = np.mean(recover_output[1:, :], axis=0)
+    recover_output_avg = np.mean(recover_output_resample, axis=0)
     
     #plot the recover_output_avg and ideal_output
     plt.figure()
@@ -27,7 +33,7 @@ if __name__ == "__main__":
     plt.grid(True)
     
     plt.subplot(2, 1, 2)
-    plt.plot(ideal_output[5, 1:], label='Ideal Output')
+    plt.plot(ideal_output[200, 1:], label='Ideal Output')
     plt.title('Ideal Output')
     plt.legend()
     plt.grid(True)
