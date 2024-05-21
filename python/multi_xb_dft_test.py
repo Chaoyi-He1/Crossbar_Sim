@@ -18,7 +18,7 @@ if __name__ == "__main__":
     # sample 10 rows for every 100 rows
     recover_output_resample = []
     for i in range(10):
-        random_index = np.random.randint(0, 100, 10) + i * 100
+        random_index = np.random.randint(0, 100, 1) + i * 100
         recover_output_resample.append(recover_output[random_index, :])
     recover_output_resample = np.vstack(recover_output_resample)
     
@@ -26,13 +26,18 @@ if __name__ == "__main__":
     
     #plot the recover_output_avg and ideal_output
     plt.figure()
-    plt.subplot(2, 1, 1)
+    plt.subplot(3, 1, 1)
     plt.plot(recover_output_avg[1:], label='Recover Output Avg')
     plt.title('Recover Output')
     plt.legend()
     plt.grid(True)
     
-    plt.subplot(2, 1, 2)
+    plt.subplot(3, 1, 2)
+    plt.plot(recover_output[10, 1:], label='Recover Output')
+    plt.legend()
+    plt.grid(True)
+    
+    plt.subplot(3, 1, 3)
     plt.plot(ideal_output[200, 1:], label='Ideal Output')
     plt.title('Ideal Output')
     plt.legend()
