@@ -11,11 +11,12 @@ from typing import Iterable, List
 import math
 import os
 import scipy.io as sio
-import network.misc as misc
+import misc as misc
 import regex as re
 from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
 import time, datetime
+from pathlib import Path
 
 class Cls_dataset(torch.utils.data.Dataset):
     def __init__(self, data_folder: str, with_CNN: bool = False):
@@ -194,7 +195,7 @@ def main(args):
     device = torch.device(args.device)
     
     print("Creating data loaders")
-    whole_dataset = Cls_dataset(data_folder=args.data_folder, with_CNN=args.with_CNN)
+    whole_dataset = Cls_dataset(data_folder=args.data_path, with_CNN=args.with_CNN)
     train_dataset, test_dataset = stratified_split(whole_dataset, 0.8)
     
     train_sampler = torch.utils.data.RandomSampler(train_dataset)
@@ -270,24 +271,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__)
 
-    parser.add_argument('--data_path', default='./fir_results/', help='dataset')
+    parser.add_argument('--data_path', default='./network/fir_results_06282024/', help='dataset')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     
-    parser.add_argument('--use_rgb', default=False, type=bool, help='use MF')
-    parser.add_argument('--use_HVI', default=True, type=bool, help='use HVI')
-    
-    parser.add_argument('--job_type', default='recover_rgb', help='job type, cls or recover_rgb')
+    parser.add_argument('--with_CNN', type=bool, default=False, help="Whether to use CNN")
 
     parser.add_argument('--device', default='cuda', help='device')
 
-    parser.add_argument('--num-classes', default=10, type=int, help='num_classes')
+    parser.add_argument('--num-classes', default=7, type=int, help='num_classes')
 
     parser.add_argument('-b', '--batch-size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
 
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
-    parser.add_argument('--epochs', default=500, type=int, metavar='N',
+    parser.add_argument('--epochs', default=200, type=int, metavar='N',
                         help='number of total epochs to run')
 
     parser.add_argument('--sync_bn', type=bool, default=False, help='whether using SyncBatchNorm')
@@ -297,6 +295,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--lr', default=0.001, type=float,
                         help='initial learning rate')
+    parser.add_argument('--lf', default=0.01, type=float,
+                        help='learning rate')
 
     parser.add_argument('--wd', '--weight-decay', default=0, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
@@ -304,7 +304,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--print-freq', default=5, type=int, help='print frequency')
 
-    parser.add_argument('--output-dir', default='./weights/recover', help='path where to save')
+    parser.add_argument('--output-dir', default='./weights/', help='path where to save')
 
     parser.add_argument('--resume', default='', help='resume from checkpoint')
 
@@ -325,6 +325,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.output_dir:
-        mkdir(args.output_dir)
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     main(args)

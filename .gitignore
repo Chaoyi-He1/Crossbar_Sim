@@ -4,3 +4,5 @@ python/__pycache__/*
 runs/*
 weights/*
 networks/fir_results_06282024/*
+runs/*
+weights/*
