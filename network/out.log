@@ -1,0 +1,12 @@
+nohup: ignoring input
+Namespace(amp=True, batch_size=32, data_path='./network/fir_results_06282024/', device='cuda', dist_url='env://', epochs=100, lr=0.001, lrf=0.01, name='', num_classes=7, num_workers=8, output_dir='./weights/', print_freq=5, resume='', start_epoch=0, sync_bn=False, test_only=False, weight_decay=0, with_CNN=False, world_size=8)
+Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/
+Creating data loaders
+Traceback (most recent call last):
+  File "cls.py", line 333, in <module>
+    main(args)
+  File "cls.py", line 201, in main
+    whole_dataset = Cls_dataset(data_folder=args.data_path, with_CNN=args.with_CNN)
+  File "cls.py", line 37, in __init__
+    self.data_files = [f for f in os.listdir(data_folder) if self.reg_exp.match(f)]
+FileNotFoundError: [Errno 2] No such file or directory: './network/fir_results_06282024/'

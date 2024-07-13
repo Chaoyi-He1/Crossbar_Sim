@@ -31,6 +31,7 @@ class Cls_dataset(torch.utils.data.Dataset):
         }
         
         self.with_CNN = with_CNN
+        self.data_folder = data_folder
         # extract all files in the folder with format "5core_xb_pn_xxxx_run.npy", where xxxx is the modulation type in the label_dict
         self.reg_exp = re.compile(r"5core_xb_pn_\w+_run.npy")
         self.data_files = [f for f in os.listdir(data_folder) if self.reg_exp.match(f)]
@@ -42,7 +43,7 @@ class Cls_dataset(torch.utils.data.Dataset):
             # extract the modulation type from the file name based on the label_dict
             modualtion_type = file.split("_")[3]
             label = self.label_dict[modualtion_type]
-            data = np.load(file)
+            data = np.load(os.path.join(self.data_folder, file))
             
             data = np.mean(data, axis=0)
             label = np.ones(data.shape[0]) * label
@@ -59,7 +60,7 @@ class Cls_dataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         data = torch.from_numpy(self.data[index]).float()
         data = data.view(1, 1, -1) if self.with_CNN else data
-        label = torch.from_numpy(self.labels[index]).long()
+        label = torch.tensor(self.labels[index]).long()
         return data, label
 
     @staticmethod
@@ -123,9 +124,9 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
                     device: torch.device, epoch: int):
     model.train()
     metric_logger = misc.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr')
-    metric_logger.add_meter('loss')
-    metric_logger.add_meter('acc')
+    metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    metric_logger.add_meter('loss', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    metric_logger.add_meter('acc', misc.SmoothedValue(window_size=1, fmt='{value:.2f}'))
 
     header = 'Epoch: [{}]'.format(epoch)
     all_preds, all_labels = [], []
@@ -134,6 +135,8 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
         output = model(data)
         
         loss = criterion(output, target)
+        L1_norm = sum(p.abs().sum() for p in model.parameters())
+        loss += 1e-4 * L1_norm
         acc = (output.argmax(-1) == target).float().mean()
         
         optimizer.zero_grad()
@@ -149,13 +152,14 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
     
     all_preds, all_labels = np.hstack(all_preds), np.hstack(all_labels)
     cm = confusion_matrix(all_labels, all_preds)
-    df_cm = pd.DataFrame(cm, index = ["pam2", "pam4", "psk4", "psk8", "qam4", "qam16", "qam64"])
+    df_cm = pd.DataFrame(cm, index = ["pam2", "pam4", "psk4", "psk8", "qam4", "qam16", "qam64"],
+                         columns = ["pam2", "pam4", "psk4", "psk8", "qam4", "qam16", "qam64"])
     plt.figure(figsize = (10,7))
     fig = sn.heatmap(df_cm, annot=True).get_figure()
     plt.close()
         
     metric_logger.synchronize_between_processes()
-    return metric_logger['loss'].global_avg, metric_logger['acc'].global_avg, fig
+    return metric_logger.meters['loss'].global_avg, metric_logger.meters['acc'].global_avg, fig
 
 def evaluate(model: nn.Module, data_loader: torch.utils.data.DataLoader, device: torch,
              criterion: nn.Module, epoch: int):
@@ -179,13 +183,14 @@ def evaluate(model: nn.Module, data_loader: torch.utils.data.DataLoader, device:
     
     all_preds, all_labels = np.hstack(all_preds), np.hstack(all_labels)
     cm = confusion_matrix(all_labels, all_preds)
-    df_cm = pd.DataFrame(cm, index = ["pam2", "pam4", "psk4", "psk8", "qam4", "qam16", "qam64"])
+    df_cm = pd.DataFrame(cm, index = ["pam2", "pam4", "psk4", "psk8", "qam4", "qam16", "qam64"],
+                         columns = ["pam2", "pam4", "psk4", "psk8", "qam4", "qam16", "qam64"])
     plt.figure(figsize = (10,7))
     fig = sn.heatmap(df_cm, annot=True).get_figure()
     plt.close()
     
     metric_logger.synchronize_between_processes()
-    return metric_logger['loss'].global_avg, metric_logger['acc'].global_avg, fig
+    return metric_logger.meters['loss'].global_avg, metric_logger.meters['acc'].global_avg, fig
 
 def main(args):
     print(args)
@@ -285,17 +290,17 @@ if __name__ == "__main__":
 
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
-    parser.add_argument('--epochs', default=200, type=int, metavar='N',
+    parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='number of total epochs to run')
 
     parser.add_argument('--sync_bn', type=bool, default=False, help='whether using SyncBatchNorm')
 
-    parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
+    parser.add_argument('-j', '--num_workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
 
     parser.add_argument('--lr', default=0.001, type=float,
                         help='initial learning rate')
-    parser.add_argument('--lf', default=0.01, type=float,
+    parser.add_argument('--lrf', default=0.01, type=float,
                         help='learning rate')
 
     parser.add_argument('--wd', '--weight-decay', default=0, type=float,
