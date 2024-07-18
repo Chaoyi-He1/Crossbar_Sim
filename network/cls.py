@@ -17,6 +17,16 @@ from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
 import time, datetime
 from pathlib import Path
+from torchvision import transforms
+
+
+def transform_data():
+    transform_data = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5), (0.5))
+    ])
+    return transform_data
+
 
 class Cls_dataset(torch.utils.data.Dataset):
     def __init__(self, data_folder: str, with_CNN: bool = False):
@@ -36,6 +46,7 @@ class Cls_dataset(torch.utils.data.Dataset):
         self.reg_exp = re.compile(r"5core_xb_pn_\w+_run.npy")
         self.data_files = [f for f in os.listdir(data_folder) if self.reg_exp.match(f)]
         self.cache_data()
+        self.transform = transform_data()
     
     def cache_data(self):
         self.data, self.labels = [], []
@@ -46,27 +57,41 @@ class Cls_dataset(torch.utils.data.Dataset):
             data = np.load(os.path.join(self.data_folder, file))
             
             data = np.mean(data, axis=0)
-            label = np.ones(data.shape[0]) * label
             
-            self.data.append(data)
-            self.labels.append(label)
+            for i in range(data.shape[0] - data.shape[1] + 1):
+                self.data.append(data[i:i + data.shape[1], :])
+                self.labels.append(label)
+            
+            print("max: ", np.max(data), "min: ", np.min(data), "mean: ", np.mean(data), "std: ", np.std(data))
         
-        self.data = np.vstack(self.data)
-        self.labels = np.hstack(self.labels)
+        self.data = np.vstack(self.data) if not self.with_CNN else np.stack(self.data, axis=0)
+        self.labels = np.hstack(self.labels) if not self.with_CNN else np.stack(self.labels, axis=0)
+        
+        #save the data and labels to .npy file
+        if not os.path.exists(os.path.join(self.data_folder, "data.npy")):
+            np.save(os.path.join(self.data_folder, "data.npy"), self.data)
+            np.save(os.path.join(self.data_folder, "labels.npy"), self.labels)
+        
+        self.data = self.data.astype(np.uint8)
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data) if not self.with_CNN else self.data.shape[0]
 
     def __getitem__(self, index):
-        data = torch.from_numpy(self.data[index]).float()
-        data = data.view(1, 1, -1) if self.with_CNN else data
-        label = torch.tensor(self.labels[index]).long()
+        if not self.with_CNN:
+            data = torch.from_numpy(self.data[index]).float()
+            label = torch.tensor(self.labels[index]).long()
+        else:
+            data = self.data[index]
+            data = data[:, :, None]
+            data = self.transform(data)
+            label = torch.tensor(self.labels[index]).long()
         return data, label
 
     @staticmethod
     def collate_fn(batch):
         data, label = list(zip(*batch))
-        data = torch.stack(data)
+        data = torch.stack(data).float()
         label = torch.stack(label)
         return data, label
 
@@ -91,17 +116,20 @@ def stratified_split(dataset, train_ratio=0.8):
 class Cls_model_with_CNN(nn.Module):
     def __init__(self, input_dim: int, num_classes: int):
         super(Cls_model_with_CNN, self).__init__()
-        self.cnn = nn.Conv2d(1, 1, (1, 3), 1, (0, 1))
+        self.cnn = nn.Conv2d(1, 1, (3, 3), 2, (1, 1))
         self.flat = nn.Flatten()
         self.fc1 = nn.Linear(input_dim, 128)
+        # self.dp1 = nn.Dropout(0.5)
         self.act1 = nn.ReLU()
         self.fc2 = nn.Linear(128, 128)
+        # self.dp2 = nn.Dropout(0.5)
         self.act2 = nn.ReLU()
         self.fc3 = nn.Linear(128, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.cnn(x)
         x = self.flat(x)
+        # x = self.fc3(self.act2(self.dp2(self.fc2(self.act1(self.dp1(self.fc1(x)))))))
         x = self.fc3(self.act2(self.fc2(self.act1(self.fc1(x)))))
         return x
 
@@ -135,8 +163,8 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
         output = model(data)
         
         loss = criterion(output, target)
-        L1_norm = sum(p.abs().sum() for p in model.parameters())
-        loss += 1e-4 * L1_norm
+        L2_norm = sum([p.norm(2) for p in model.parameters()])
+        loss += 1e-4 * L2_norm
         acc = (output.argmax(-1) == target).float().mean()
         
         optimizer.zero_grad()
@@ -214,11 +242,11 @@ def main(args):
                                              num_workers=args.num_workers)
     
     print("Creating model")
-    model = Cls_model_with_CNN(whole_dataset.data.shape[1], len(whole_dataset.label_dict)) if args.with_CNN else \
+    model = Cls_model_with_CNN(int((whole_dataset.data.shape[2] / 2) ** 2), len(whole_dataset.label_dict)) if args.with_CNN else \
             Cls_model_without_CNN(whole_dataset.data.shape[1], len(whole_dataset.label_dict))
     model.to(device)
     if args.with_CNN:
-        tb_writer.add_graph(model, torch.randn(1, 1, 1, whole_dataset.data.shape[1]).to(device))
+        tb_writer.add_graph(model, torch.randn(1, 1, whole_dataset.data.shape[2], whole_dataset.data.shape[2]).to(device))
     else:
         tb_writer.add_graph(model, torch.randn(1, whole_dataset.data.shape[1]).to(device))
     
@@ -263,12 +291,24 @@ def main(args):
     print('Training time {}'.format(total_time_str))
     
     # export final model to onnx
-    dummy_input = torch.randn(1, 1, 1, whole_dataset.data.shape[1]).to(device) if args.with_CNN else \
+    dummy_input = torch.randn(1, 1, whole_dataset.data.shape[2], whole_dataset.data.shape[2]).to(device) if args.with_CNN else \
                   torch.randn(1, whole_dataset.data.shape[1]).to(device)
     model.eval()
     torch.onnx.export(model, dummy_input, os.path.join(args.output_dir, 'model.onnx'),
-                      export_params=True, opset_version=11)
-
+                      export_params=True, opset_version=16, dynamic_axes={'input': {0: 'batch_size'}, 'sensor_out': {0: 'batch_size'}},
+                      input_names=['input'], output_names=['sensor_out'])
+    
+    # min, max of the model parameters
+    min_params, max_params = [], []
+    for p in model.parameters():
+        min_params.append(p.min().item())
+        max_params.append(p.max().item())
+    min_params, max_params = np.min(min_params), np.max(max_params)
+    print(f"Min of model parameters: {min_params}, Max of model parameters: {max_params}")
+    # plot histogram of model parameters
+    params = [p.detach().cpu().numpy().flatten() for p in model.parameters()]
+    plt.hist(np.hstack(params), bins=100)
+    plt.savefig(os.path.join(args.output_dir, 'model_params_hist.png'))
 
 if __name__ == "__main__":
     import argparse
@@ -279,7 +319,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', default='./network/fir_results_06282024/', help='dataset')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     
-    parser.add_argument('--with_CNN', type=bool, default=False, help="Whether to use CNN")
+    parser.add_argument('--with_CNN', type=bool, default=True, help="Whether to use CNN")
 
     parser.add_argument('--device', default='cuda', help='device')
 
@@ -290,7 +330,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
-    parser.add_argument('--epochs', default=100, type=int, metavar='N',
+    parser.add_argument('--epochs', default=20, type=int, metavar='N',
                         help='number of total epochs to run')
 
     parser.add_argument('--sync_bn', type=bool, default=False, help='whether using SyncBatchNorm')
