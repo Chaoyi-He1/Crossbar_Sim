@@ -164,7 +164,7 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
         
         loss = criterion(output, target)
         L2_norm = sum([p.norm(2) for p in model.parameters()])
-        loss += 1e-4 * L2_norm
+        loss += 1e-6 * L2_norm
         acc = (output.argmax(-1) == target).float().mean()
         
         optimizer.zero_grad()
