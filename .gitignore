@@ -6,3 +6,6 @@ weights/*
 networks/fir_results_06282024/*
 runs/*
 weights/*
+networks/fir_results_06282024/*.npy
+network/fir_results_06282024/data.npy
+network/fir_results_06282024/labels.npy
