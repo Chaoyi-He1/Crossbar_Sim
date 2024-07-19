@@ -57,20 +57,22 @@ class Cls_dataset(torch.utils.data.Dataset):
             data = np.load(os.path.join(self.data_folder, file))
             
             data = np.mean(data, axis=0)
+            label = np.array([label] * data.shape[0])
+            data = np.reshape(data, (data.shape[0], 8, 8))
+            self.data.append(data)
+            self.labels.append(label)
             
-            for i in range(data.shape[0] - data.shape[1] + 1):
-                self.data.append(data[i:i + data.shape[1], :])
-                self.labels.append(label)
-            
-            print("max: ", np.max(data), "min: ", np.min(data), "mean: ", np.mean(data), "std: ", np.std(data))
+            # for i in range(data.shape[0] - data.shape[1] + 1):
+            #     self.data.append(data[i:i + data.shape[1], :])
+            #     self.labels.append(label)
         
-        self.data = np.vstack(self.data) if not self.with_CNN else np.stack(self.data, axis=0)
-        self.labels = np.hstack(self.labels) if not self.with_CNN else np.stack(self.labels, axis=0)
+        self.data = np.vstack(self.data) if not self.with_CNN else np.concatenate(self.data, axis=0)
+        self.labels = np.hstack(self.labels) if not self.with_CNN else np.concatenate(self.labels, axis=0)
         
         #save the data and labels to .npy file
-        if not os.path.exists(os.path.join(self.data_folder, "data.npy")):
-            np.save(os.path.join(self.data_folder, "data.npy"), self.data)
-            np.save(os.path.join(self.data_folder, "labels.npy"), self.labels)
+        if not os.path.exists(os.path.join(self.data_folder, "data_8x8.npy")):
+            np.save(os.path.join(self.data_folder, "data_8x8.npy"), self.data)
+            np.save(os.path.join(self.data_folder, "labels_8x8.npy"), self.labels)
         
         self.data = self.data.astype(np.uint8)
 
@@ -116,18 +118,33 @@ def stratified_split(dataset, train_ratio=0.8):
 class Cls_model_with_CNN(nn.Module):
     def __init__(self, input_dim: int, num_classes: int):
         super(Cls_model_with_CNN, self).__init__()
-        self.cnn = nn.Conv2d(1, 1, (3, 3), 2, (1, 1))
+        self.cnn1 = nn.Conv2d(1, 4, (3, 3), padding=1) #(b, 1, 8, 8) -> (b, 4, 8, 8)
+        self.cnn_act1 = nn.ReLU()
+        self.pool1 = nn.AvgPool2d(2)        #(b, 4, 8, 8) -> (b, 4, 4, 4)
+        
+        # self.cnn2 = nn.Conv2d(4, 4, (5, 5)) #(b, 4, 15, 15) -> (b, 4, 11, 11)
+        # self.cnn_act2 = nn.ReLU()
+        # self.pool2 = nn.AvgPool2d(2)        #(b, 4, 11, 11) -> (b, 4, 5, 5)
+        
+        # self.cnn3 = nn.Conv2d(8, 16, (3, 3), 2, (1, 1))
+        # self.cnn_act = nn.ReLU()
+        # self.pool = nn.MaxPool2d(2)
+        
         self.flat = nn.Flatten()
+        
         self.fc1 = nn.Linear(input_dim, 128)
         # self.dp1 = nn.Dropout(0.5)
         self.act1 = nn.ReLU()
+        
         self.fc2 = nn.Linear(128, 128)
         # self.dp2 = nn.Dropout(0.5)
         self.act2 = nn.ReLU()
+        
         self.fc3 = nn.Linear(128, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
-        x = self.cnn(x)
+        x = self.pool1(self.cnn_act1(self.cnn1(x)))
+        # x = self.pool2(self.cnn_act2(self.cnn2(x)))
         x = self.flat(x)
         # x = self.fc3(self.act2(self.dp2(self.fc2(self.act1(self.dp1(self.fc1(x)))))))
         x = self.fc3(self.act2(self.fc2(self.act1(self.fc1(x)))))
@@ -163,8 +180,16 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
         output = model(data)
         
         loss = criterion(output, target)
-        L2_norm = sum([p.norm(2) for p in model.parameters()])
-        loss += 1e-9 * L2_norm
+
+        small_params = [p.abs() < 0.1 for p in model.parameters()]
+        mid_params = [(0.1 <= p.abs()) & (p.abs() < 0.6) for p in model.parameters()]
+        large_params = [p.abs() >= 0.6 for p in model.parameters()]
+        reg_loss = 0.0001 * torch.sum(torch.stack([torch.sum(p[small_params[i]].pow(2)) for i, p in enumerate(model.parameters())])) + \
+                   0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[mid_params[i]]) - 0.5).pow(2)) for i, p in enumerate(model.parameters())])) + \
+                   0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[large_params[i]]) - 1).pow(2)) for i, p in enumerate(model.parameters())]))
+        if epoch > 3:
+            loss += reg_loss
+        
         acc = (output.argmax(-1) == target).float().mean()
         
         optimizer.zero_grad()
@@ -242,7 +267,7 @@ def main(args):
                                              num_workers=args.num_workers)
     
     print("Creating model")
-    model = Cls_model_with_CNN(int((whole_dataset.data.shape[2] / 2) ** 2), len(whole_dataset.label_dict)) if args.with_CNN else \
+    model = Cls_model_with_CNN(64, len(whole_dataset.label_dict)) if args.with_CNN else \
             Cls_model_without_CNN(whole_dataset.data.shape[1], len(whole_dataset.label_dict))
     model.to(device)
     if args.with_CNN:
@@ -330,7 +355,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
-    parser.add_argument('--epochs', default=20, type=int, metavar='N',
+    parser.add_argument('--epochs', default=40, type=int, metavar='N',
                         help='number of total epochs to run')
 
     parser.add_argument('--sync_bn', type=bool, default=False, help='whether using SyncBatchNorm')
