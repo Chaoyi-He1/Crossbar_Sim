@@ -58,7 +58,7 @@ class Cls_dataset(torch.utils.data.Dataset):
             
             data = np.mean(data, axis=0)
             label = np.array([label] * data.shape[0])
-            data = np.reshape(data, (data.shape[0], 8, 8))
+            # data = np.reshape(data, (data.shape[0], 8, 8))
             self.data.append(data)
             self.labels.append(label)
             
@@ -70,9 +70,9 @@ class Cls_dataset(torch.utils.data.Dataset):
         self.labels = np.hstack(self.labels) if not self.with_CNN else np.concatenate(self.labels, axis=0)
         
         #save the data and labels to .npy file
-        if not os.path.exists(os.path.join(self.data_folder, "data_8x8.npy")):
-            np.save(os.path.join(self.data_folder, "data_8x8.npy"), self.data)
-            np.save(os.path.join(self.data_folder, "labels_8x8.npy"), self.labels)
+        if not os.path.exists(os.path.join(self.data_folder, "data_mlp.npy")):
+            np.save(os.path.join(self.data_folder, "data_mlp.npy"), self.data)
+            np.save(os.path.join(self.data_folder, "labels_mlp.npy"), self.labels)
         
         self.data = self.data.astype(np.uint8)
 
@@ -122,9 +122,9 @@ class Cls_model_with_CNN(nn.Module):
         self.cnn_act1 = nn.ReLU()
         self.pool1 = nn.AvgPool2d(2)        #(b, 4, 8, 8) -> (b, 4, 4, 4)
         
-        # self.cnn2 = nn.Conv2d(4, 4, (5, 5)) #(b, 4, 15, 15) -> (b, 4, 11, 11)
-        # self.cnn_act2 = nn.ReLU()
-        # self.pool2 = nn.AvgPool2d(2)        #(b, 4, 11, 11) -> (b, 4, 5, 5)
+        self.cnn2 = nn.Conv2d(4, 4, (5, 5)) #(b, 4, 15, 15) -> (b, 4, 11, 11)
+        self.cnn_act2 = nn.ReLU()
+        self.pool2 = nn.AvgPool2d(2)        #(b, 4, 11, 11) -> (b, 4, 5, 5)
         
         # self.cnn3 = nn.Conv2d(8, 16, (3, 3), 2, (1, 1))
         # self.cnn_act = nn.ReLU()
@@ -181,14 +181,14 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
         
         loss = criterion(output, target)
 
-        small_params = [p.abs() < 0.1 for p in model.parameters()]
-        mid_params = [(0.1 <= p.abs()) & (p.abs() < 0.6) for p in model.parameters()]
-        large_params = [p.abs() >= 0.6 for p in model.parameters()]
-        reg_loss = 0.0001 * torch.sum(torch.stack([torch.sum(p[small_params[i]].pow(2)) for i, p in enumerate(model.parameters())])) + \
-                   0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[mid_params[i]]) - 0.5).pow(2)) for i, p in enumerate(model.parameters())])) + \
-                   0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[large_params[i]]) - 1).pow(2)) for i, p in enumerate(model.parameters())]))
-        if epoch > 3:
-            loss += reg_loss
+        # small_params = [p.abs() < 0.1 for p in model.parameters()]
+        # mid_params = [(0.1 <= p.abs()) & (p.abs() < 0.6) for p in model.parameters()]
+        # large_params = [p.abs() >= 0.6 for p in model.parameters()]
+        # reg_loss = 0.0001 * torch.sum(torch.stack([torch.sum(p[small_params[i]].pow(2)) for i, p in enumerate(model.parameters())])) + \
+        #            0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[mid_params[i]]) - 0.5).pow(2)) for i, p in enumerate(model.parameters())])) + \
+        #            0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[large_params[i]]) - 1).pow(2)) for i, p in enumerate(model.parameters())]))
+        # if epoch > 3:
+        #     loss += reg_loss
         
         acc = (output.argmax(-1) == target).float().mean()
         
@@ -344,7 +344,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', default='./network/fir_results_06282024/', help='dataset')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     
-    parser.add_argument('--with_CNN', type=bool, default=True, help="Whether to use CNN")
+    parser.add_argument('--with_CNN', type=bool, default=False, help="Whether to use CNN")
 
     parser.add_argument('--device', default='cuda', help='device')
 
