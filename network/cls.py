@@ -58,7 +58,7 @@ class Cls_dataset(torch.utils.data.Dataset):
             
             data = np.mean(data, axis=0)
             label = np.array([label] * data.shape[0])
-            # data = np.reshape(data, (data.shape[0], 8, 8))
+            data = np.reshape(data, (data.shape[0], 8, 8))
             self.data.append(data)
             self.labels.append(label)
             
@@ -81,7 +81,8 @@ class Cls_dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         if not self.with_CNN:
-            data = torch.from_numpy(self.data[index]).float()
+            data = self.data[index][:, :, None]
+            data = self.transform(data)
             label = torch.tensor(self.labels[index]).long()
         else:
             data = self.data[index]
@@ -153,6 +154,7 @@ class Cls_model_with_CNN(nn.Module):
 class Cls_model_without_CNN(nn.Module):
     def __init__(self, input_dim: int, num_classes: int):
         super(Cls_model_without_CNN, self).__init__()
+        self.flat = nn.Flatten()
         self.fc1 = nn.Linear(input_dim, 128)
         self.act1 = nn.ReLU()
         self.fc2 = nn.Linear(128, 128)
@@ -160,6 +162,7 @@ class Cls_model_without_CNN(nn.Module):
         self.fc3 = nn.Linear(128, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:
+        x = self.flat(x)
         x = self.fc3(self.act2(self.fc2(self.act1(self.fc1(x)))))
         return x
 
@@ -181,14 +184,21 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
         
         loss = criterion(output, target)
 
-        # small_params = [p.abs() < 0.1 for p in model.parameters()]
-        # mid_params = [(0.1 <= p.abs()) & (p.abs() < 0.6) for p in model.parameters()]
-        # large_params = [p.abs() >= 0.6 for p in model.parameters()]
-        # reg_loss = 0.0001 * torch.sum(torch.stack([torch.sum(p[small_params[i]].pow(2)) for i, p in enumerate(model.parameters())])) + \
-        #            0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[mid_params[i]]) - 0.5).pow(2)) for i, p in enumerate(model.parameters())])) + \
-        #            0.001 * torch.sum(torch.stack([torch.sum((torch.abs(p[large_params[i]]) - 1).pow(2)) for i, p in enumerate(model.parameters())]))
-        # if epoch > 3:
-        #     loss += reg_loss
+        # regularization loss, let the model parameters to be discretized with 0.1 step
+        if epoch > 3:
+            central_params = torch.arange(0, 1.1, 0.1).to(device)
+            reg_params = {}
+            for c in central_params:
+                if c == 0:
+                    reg_params[c] = [p.abs() < 0.05 for p in model.parameters()]
+                elif c == 1:
+                    reg_params[c] = [p.abs() >= 0.95 for p in model.parameters()]
+                else:
+                    reg_params[c] = [(c - 0.05 <= p.abs()) & (p.abs() < c + 0.05) for p in model.parameters()]
+            reg_loss = 0
+            for c, params in reg_params.items():
+                reg_loss += .1 * torch.sum(torch.stack([torch.sum((torch.abs(p[params[i]]) - c).pow(2)) for i, p in enumerate(model.parameters())]))
+            loss += reg_loss
         
         acc = (output.argmax(-1) == target).float().mean()
         
@@ -268,12 +278,12 @@ def main(args):
     
     print("Creating model")
     model = Cls_model_with_CNN(64, len(whole_dataset.label_dict)) if args.with_CNN else \
-            Cls_model_without_CNN(whole_dataset.data.shape[1], len(whole_dataset.label_dict))
+            Cls_model_without_CNN(64, len(whole_dataset.label_dict))
     model.to(device)
     if args.with_CNN:
         tb_writer.add_graph(model, torch.randn(1, 1, whole_dataset.data.shape[2], whole_dataset.data.shape[2]).to(device))
     else:
-        tb_writer.add_graph(model, torch.randn(1, whole_dataset.data.shape[1]).to(device))
+        tb_writer.add_graph(model, torch.randn(1, 1, whole_dataset.data.shape[2], whole_dataset.data.shape[2]).to(device))
     
     num_params, num_layers = sum(p.numel() for p in model.parameters()), len(list(model.parameters()))
     print(f"Number of parameters: {num_params}, Number of layers: {num_layers}")
@@ -317,7 +327,7 @@ def main(args):
     
     # export final model to onnx
     dummy_input = torch.randn(1, 1, whole_dataset.data.shape[2], whole_dataset.data.shape[2]).to(device) if args.with_CNN else \
-                  torch.randn(1, whole_dataset.data.shape[1]).to(device)
+                  torch.randn(1, 1, whole_dataset.data.shape[2], whole_dataset.data.shape[2]).to(device)
     model.eval()
     torch.onnx.export(model, dummy_input, os.path.join(args.output_dir, 'model.onnx'),
                       export_params=True, opset_version=16, dynamic_axes={'input': {0: 'batch_size'}, 'sensor_out': {0: 'batch_size'}},
@@ -355,7 +365,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
 
-    parser.add_argument('--epochs', default=40, type=int, metavar='N',
+    parser.add_argument('--epochs', default=30, type=int, metavar='N',
                         help='number of total epochs to run')
 
     parser.add_argument('--sync_bn', type=bool, default=False, help='whether using SyncBatchNorm')
