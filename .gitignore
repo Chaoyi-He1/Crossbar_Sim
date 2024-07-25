@@ -13,3 +13,4 @@ network/fir_results_06282024/data_8x8.npy
 network/fir_results_06282024/labels_8x8.npy
 network/fir_results_06282024/data_mlp.npy
 network/fir_results_06282024/labels_mlp.npy
+idt_project/data/*
