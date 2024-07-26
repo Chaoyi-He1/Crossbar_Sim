@@ -14,3 +14,7 @@ network/fir_results_06282024/labels_8x8.npy
 network/fir_results_06282024/data_mlp.npy
 network/fir_results_06282024/labels_mlp.npy
 idt_project/data/*
+idt_project/__pycache__/*
+idt_project/datasets/__pycache__/*
+idt_project/model/__pycache__/*
+idt_project/misc/__pycache__/*
