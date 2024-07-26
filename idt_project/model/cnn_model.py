@@ -127,3 +127,11 @@ class CNN_conv(nn.Module):
         x = self.fc2(x)
         
         return x
+
+
+if __name__ == "__main__":
+    model = CNN_BN(1, 30, 102, 62)
+    print(model)
+    model = CNN_conv(1, 30, 102, 62)
+    print(model)
+    
