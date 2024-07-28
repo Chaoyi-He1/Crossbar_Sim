@@ -1,0 +1,117 @@
+import time
+import os
+import datetime
+import random
+import math
+import torch
+from pathlib import Path
+from model import CNN_BN, CNN_conv, mlp_model
+from train_eval import train_one_epoch, evaluate
+from datasets import idt_dataset
+import misc
+from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser(description='IDT Project')
+    parser.add_argument('--train_data', default='data/Train/idt_train_data.npy', type=str)
+    parser.add_argument('--train_label', default='data/Train/idt_train_label.npy', type=str)
+    parser.add_argument('--test_data', default='data/Test/idt_test_data.npy', type=str)
+    parser.add_argument('--test_label', default='data/Test/idt_test_label.npy', type=str)
+    
+    parser.add_argument('--model', default='CNN_BN', type=str)
+    parser.add_argument('-b', '--batch-size', default=32, type=int,
+                        help='images per gpu, the total batch size is $NGPU x batch_size')
+    parser.add_argument('--num_classes', default=30, type=int)
+    parser.add_argument('--num_epochs', default=100, type=int)
+    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--lrf', default=0.1, type=float)
+    parser.add_argument('--alpha', default=0.1, type=float)
+    
+    parser.add_argument('-j', '--num_workers', default=8, type=int, metavar='N',
+                        help='number of data loading workers (default: 4)')
+    parser.add_argument('--print-freq', default=5, type=int, help='print frequency')
+    parser.add_argument('--device', default='cuda', help='device')
+    parser.add_argument('--output-dir', default='./weights/', help='path where to save')
+    parser.add_argument("--amp", default=True, type=bool,
+                        help="Use torch.cuda.amp for mixed precision training")
+    
+    args = parser.parse_args()
+    if args.output_dir:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    
+    return parser.parse_args()
+
+def main(args):
+    print(args)
+    print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
+    tb_writer = SummaryWriter()
+    
+    device = torch.device(args.device)
+    
+    print("Creating data loaders")
+    train_dataset = idt_dataset(args.train_data, args.train_label)
+    val_dataset = idt_dataset(args.test_data, args.test_label)
+    
+    train_sampler = torch.utils.data.RandomSampler(train_dataset)
+    val_sampler = torch.utils.data.SequentialSampler(val_dataset)
+    
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, 
+                                               sampler=train_sampler, num_workers=args.num_workers,
+                                               drop_last=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
+                                             sampler=val_sampler, num_workers=args.num_workers,
+                                             drop_last=True)
+    
+    print("Creating model: {}".format(args.model))
+    if args.model == 'CNN_BN':
+        model = CNN_BN(1, args.num_classes, train_dataset.h, train_dataset.w)
+    elif args.model == 'CNN_conv':
+        model = CNN_conv(1, args.num_classes, train_dataset.h, train_dataset.w)
+    elif args.model == 'mlp_model':
+        model = mlp_model(train_dataset.h * train_dataset.w, args.num_classes)
+    else:
+        raise ValueError("Model not supported")
+    model.to(device)
+    
+    if args.model == 'CNN_BN':
+        tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
+    elif args.model == 'CNN_conv':
+        tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
+    elif args.model == 'mlp_model':
+        tb_writer.add_graph(model, torch.randn(1, train_dataset.h * train_dataset.w).to(device))
+        
+    num_params, num_layers = sum(p.numel() for p in model.parameters()), len(list(model.parameters()))
+    print("Number of parameters: {}".format(num_params), "Number of layers: {}".format(num_layers))
+    
+    params_to_optimize = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.Adam(params_to_optimize, lr=args.lr)
+    
+    lf = lambda x: ((1 + math.cos(x * math.pi / args.epochs)) / 2) * (1 - args.lrf) + args.lrf
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
+    scheduler.last_epoch = 0
+    
+    scaler = torch.cuda.amp.GradScaler() if args.amp else None
+    
+    print("Start training")
+    start_time = time.time()
+    for epoch in range(args.num_epochs):
+        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, train_loader, device, epoch, 
+                                                           args.print_freq, scaler, args.num_classes)
+        
+        val_loss, val_acc, fig = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
+        
+        tb_writer.add_scalar("train/loss", train_loss, epoch)
+        tb_writer.add_scalar("train/acc", train_acc, epoch)
+        tb_writer.add_scalar("val/loss", val_loss, epoch)
+        tb_writer.add_scalar("val/acc", val_acc, epoch)
+        tb_writer.add_figure("Confusion Matrix", fig, epoch)
+        
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), os.path.join(args.output_dir, "model_{}.pth".format(epoch)))
+        
+        scheduler.step()
