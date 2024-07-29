@@ -20,3 +20,4 @@ idt_project/model/__pycache__/*
 idt_project/misc/__pycache__/*
 idt_project/train_eval/__pycache__/*
 idt_project/*.log
+idt_project/runs/*
