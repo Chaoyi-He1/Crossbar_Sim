@@ -49,5 +49,5 @@ class idt_dataset(Dataset):
     def collate_fn(batch):
         data, label = list(zip(*batch))
         data = torch.stack(data, dim=0)
-        label = torch.stack(label, dim=0)
+        label = torch.concat(label, dim=0).view(-1)
         return data, label

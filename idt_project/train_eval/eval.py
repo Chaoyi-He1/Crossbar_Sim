@@ -41,4 +41,4 @@ def evaluate(model, data_loader, device, epoch, print_freq=10, scaler=None, num_
     plt.close()
     
     metric_logger.synchronize_between_processes()
-    return metric_logger["loss"].global_avg, metric_logger["acc"].global_avg, fig
+    return metric_logger.meters["loss"].global_avg, metric_logger.meters["acc"].global_avg, fig

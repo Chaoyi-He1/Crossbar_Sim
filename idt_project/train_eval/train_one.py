@@ -13,20 +13,20 @@ def criterion(pred, target):
     acc = torch.mean((torch.argmax(pred, dim=1) == target).float())
     return loss, acc
 
-def quantize_regularize(model, alpha=0.1):
-    central_params = torch.arange(0.0, 1.1, 0.1).to(model.device)
+def quantize_regularize(model, device, alpha=0.1):
+    central_params = torch.arange(0.0, 1.1, 0.1).to(device)
     reg_params = {}
     for c in central_params:
         if c == 0.0:
-            reg_params[c] = [p.abs() < 0.05 for n, p in model.named_parameters() if "bn" not in n]
+            reg_params[c] = [p.abs() < 0.05 for n, p in model.named_parameters()]
         if c == 1.0:
-            reg_params[c] = [p.abs() > 0.95 for n, p in model.named_parameters() if "bn" not in n]
+            reg_params[c] = [p.abs() > 0.95 for n, p in model.named_parameters()]
         else:
-            reg_params[c] = [(c - 0.05 <= p.abs()) & (p.abs() < c + 0.05) for n, p in model.named_parameters() if "bn" not in n]
+            reg_params[c] = [(c - 0.05 <= p.abs()) & (p.abs() < c + 0.05) for n, p in model.named_parameters()]
     
     reg_loss = 0.0
     for c, params in reg_params.items():
-        reg_loss += alpha * torch.sum(torch.stack([torch.sum((p[params[i]].abs() - c).abs()) for i, n, p in enumerate(model.named_parameters()) if "bn" not in n]))
+        reg_loss += alpha * torch.sum(torch.stack([torch.sum((p[params[i]].abs() - c).abs()) for i, (n, p) in enumerate(model.named_parameters()) if "bn" not in n]))
         
     return reg_loss  
 
@@ -45,7 +45,8 @@ def train_one_epoch(model, optimizer,
         with torch.cuda.amp.autocast(enabled=(scaler is not None)):
             output = model(images)
             loss, acc = criterion(output, target)
-            loss += quantize_regularize(model)
+            if epoch > 10:
+                loss += quantize_regularize(model, device)
         
         if scaler is not None:
             scaler.scale(loss).backward()
@@ -67,5 +68,5 @@ def train_one_epoch(model, optimizer,
     fig = sn.heatmap(df_cm, annot=True).get_figure()
     plt.close()
     metric_logger.synchronize_between_processes()
-    return metric_logger["loss"].global_avg, metric_logger["acc"].global_avg, fig
+    return metric_logger.meters["loss"].global_avg, metric_logger.meters["acc"].global_avg, fig
     

@@ -19,3 +19,4 @@ idt_project/datasets/__pycache__/*
 idt_project/model/__pycache__/*
 idt_project/misc/__pycache__/*
 idt_project/train_eval/__pycache__/*
+idt_project/*.log
