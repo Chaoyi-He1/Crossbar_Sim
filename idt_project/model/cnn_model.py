@@ -102,15 +102,15 @@ class CNN_conv(nn.Module):
         self.maxpool3 = nn.MaxPool2d(2)
         self.h, self.w = self.h // 2, self.w // 2
         
-        self.conv4 = ConvConvReLU(64, 128)
+        self.conv4 = ConvConvReLU(64, 64)
         self.maxpool4 = nn.MaxPool2d(2)
         self.h, self.w = self.h // 2, self.w // 2
         
-        self.conv5 = ConvConvReLU(128, 128)
+        self.conv5 = ConvConvReLU(64, 64)
         
         self.flatten = nn.Flatten()
         
-        self.fc1 = nn.Linear(128 * self.h * self.w, 128)
+        self.fc1 = nn.Linear(64 * self.h * self.w, 128)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(128, num_cls)
         
