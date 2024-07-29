@@ -30,8 +30,8 @@ def parse_args():
     parser.add_argument('--num_classes', default=30, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--lr', default=0.001, type=float)
-    parser.add_argument('--lrf', default=0.1, type=float)
-    parser.add_argument('--alpha', default=0.001, type=float)
+    parser.add_argument('--lrf', default=0.01, type=float)
+    parser.add_argument('--alpha', default=0.01, type=float)
     
     parser.add_argument('-j', '--num_workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
@@ -53,6 +53,13 @@ def main(args):
     tb_writer = SummaryWriter()
     
     device = torch.device(args.device)
+    
+    # fix the seed
+    # seed = 42
+    # random.seed(seed)
+    # np.random.seed(seed)
+    # torch.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed)
     
     print("Creating data loaders")
     train_dataset = idt_dataset(args.train_data, args.train_label)
