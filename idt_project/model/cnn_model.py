@@ -23,9 +23,9 @@ class ConvConvReLU(nn.Module):
 
         padding = kernel_size // 2 if dilation == 1 else dilation
         self.conv1 = nn.Conv2d(in_ch, out_ch, kernel_size, padding=padding, dilation=dilation)
-        self.conv2 = nn.Conv2d(out_ch, out_ch, 1)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1)
         self.relu = nn.ReLU()
-        self.conv_res = nn.Conv2d(in_ch, out_ch, 1, bias=False)
+        self.conv_res = nn.Conv2d(in_ch, out_ch, 3, padding=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.relu(self.conv2(self.conv1(x))) + self.conv_res(x)
@@ -53,6 +53,8 @@ class CNN_BN(nn.Module):
         self.h, self.w = self.h // 2, self.w // 2
         
         self.conv5 = ConvBNReLU(128, 128)
+        self.maxpool5 = nn.MaxPool2d(2)
+        self.h, self.w = self.h // 2, self.w // 2
         
         self.flatten = nn.Flatten()
         
@@ -75,6 +77,7 @@ class CNN_BN(nn.Module):
         x = self.maxpool4(x)
         
         x = self.conv5(x)
+        x = self.maxpool5(x)
         
         x = self.flatten(x)
         
@@ -98,21 +101,25 @@ class CNN_conv(nn.Module):
         self.maxpool2 = nn.MaxPool2d(2)
         self.h, self.w = self.h // 2, self.w // 2
         
-        self.conv3 = ConvConvReLU(32, 64)
+        self.conv3 = ConvConvReLU(32, 64, 5)
         self.maxpool3 = nn.MaxPool2d(2)
         self.h, self.w = self.h // 2, self.w // 2
         
-        self.conv4 = ConvConvReLU(64, 64)
+        self.conv4 = ConvConvReLU(64, 128, 5)
         self.maxpool4 = nn.MaxPool2d(2)
         self.h, self.w = self.h // 2, self.w // 2
         
-        self.conv5 = ConvConvReLU(64, 64)
+        self.conv5 = ConvConvReLU(128, 128)
+        self.maxpool5 = nn.MaxPool2d(2)
+        self.h, self.w = self.h // 2, self.w // 2
         
         self.flatten = nn.Flatten()
         
-        self.fc1 = nn.Linear(64 * self.h * self.w, 128)
+        self.fc1 = nn.Linear(128 * self.h * self.w, 128)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(128, num_cls)
+        self.fc2 = nn.Linear(128, 128)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(128, num_cls)
         
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -129,12 +136,15 @@ class CNN_conv(nn.Module):
         x = self.maxpool4(x)
         
         x = self.conv5(x)
+        x = self.maxpool5(x)
         
         x = self.flatten(x)
         
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
         
         return x
 

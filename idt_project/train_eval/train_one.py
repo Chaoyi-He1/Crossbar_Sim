@@ -13,7 +13,7 @@ def criterion(pred, target):
     acc = torch.mean((torch.argmax(pred, dim=1) == target).float())
     return loss, acc
 
-def quantize_regularize(model, device, alpha=0.1):
+def quantize_regularize(model, device, alpha=0.5):
     central_params = torch.arange(0.0, 1.1, 0.1).to(device)
     reg_params = {}
     for c in central_params:
@@ -30,7 +30,7 @@ def quantize_regularize(model, device, alpha=0.1):
         
     return reg_loss  
 
-def train_one_epoch(model, optimizer, 
+def train_one_epoch(model, optimizer, alpha,
                     data_loader, device, epoch, print_freq=10, scaler=None, num_classes=30):
     model.train()
     header = 'Epoch: [{}]'.format(epoch)
@@ -45,16 +45,15 @@ def train_one_epoch(model, optimizer,
         with torch.cuda.amp.autocast(enabled=(scaler is not None)):
             output = model(images)
             loss, acc = criterion(output, target)
-            if epoch >= 30:
-                loss += quantize_regularize(model, device)
+            if epoch >= 80:
+                loss += quantize_regularize(model, device, alpha)
         
         if scaler is not None:
             scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
         else:
             loss.backward()
-            optimizer.step()
+        
+        torch.gradient.clip_grad_norm_(model.parameters(), 1.0)
         
         metric_logger.update(lr=optimizer.param_groups[0]["lr"], loss=loss.item(), acc=acc.item())
         all_preds.append(torch.argmax(output, dim=-1).detach().cpu().numpy())

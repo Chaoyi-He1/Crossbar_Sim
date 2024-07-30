@@ -28,9 +28,9 @@ def parse_args():
     parser.add_argument('-b', '--batch-size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--num_classes', default=30, type=int)
-    parser.add_argument('--epochs', default=100, type=int)
-    parser.add_argument('--lr', default=0.001, type=float)
-    parser.add_argument('--lrf', default=0.01, type=float)
+    parser.add_argument('--epochs', default=170, type=int)
+    parser.add_argument('--lr', default=0.0001, type=float)
+    parser.add_argument('--lrf', default=0.1, type=float)
     parser.add_argument('--alpha', default=0.01, type=float)
     
     parser.add_argument('-j', '--num_workers', default=8, type=int, metavar='N',
@@ -109,7 +109,7 @@ def main(args):
     start_time = time.time()
     best_acc, best_model = 0.0, None
     for epoch in range(args.epochs):
-        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, train_loader, device, epoch, 
+        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
                                                            args.print_freq, scaler, args.num_classes)
         
         val_loss, val_acc, val_cfm = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
