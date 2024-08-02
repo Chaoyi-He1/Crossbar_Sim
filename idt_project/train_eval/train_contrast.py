@@ -8,10 +8,21 @@ import misc.util as util
 import torch.nn.functional as F
 
 
-def criterion(pred, target):
-    loss = F.cross_entropy(pred, target)
-    acc = torch.mean((torch.argmax(pred, dim=1) == target).float())
-    return loss, acc
+def criterion(pred):
+    """
+    pred: (B, dim), where B contains B / 2 pairs of samples
+    Calculate the contrastive loss to maximize the similarity between the positive pairs
+    and minimize the similarity between the negative pairs
+    """
+    B = pred.shape[0]
+    # Calculate the similarity matrix
+    sim_matrix = torch.matmul(pred, pred.t())
+    # do softmax for each row, make the diagonal
+    sim_matrix.scatter_(1, torch.arange(B).to(pred.device).view(-1, 1), 1e-6)
+    sim_matrix = F.log_softmax(sim_matrix, dim=-1)
+    # Calculate the similarity between the positive pairs
+    pos_sim = torch.diag(sim_matrix, diagonal=1)[::2]
+    return -pos_sim.mean()
 
 def quantize_regularize(model, device, alpha=0.5):
     central_params = torch.arange(0.0, 1.1, 0.1).to(device)
@@ -36,17 +47,18 @@ def train_one_epoch(model, optimizer, alpha,
     header = 'Epoch: [{}]'.format(epoch)
     metric_logger = util.MetricLogger(delimiter="  ")
     
-    all_preds, all_targets = [], []
-    for images, target in metric_logger.log_every(data_loader, print_freq, header):
-        images, target = images.to(device), target.to(device)
+    for images, targets in metric_logger.log_every(data_loader, print_freq, header):
+        images = images.to(device)
+        # check if targets contains batch_size / 2 unique labels, targets is a tensor of shape (batch_size,)
+        assert len(torch.unique(targets)) == targets.shape[0] // 2
         
         optimizer.zero_grad()
         
         with torch.cuda.amp.autocast(enabled=(scaler is not None)):
             output = model(images)
-            loss, acc = criterion(output, target)
-            # if epoch >= 80:
-            #     loss += quantize_regularize(model, device, alpha)
+            loss = criterion(output)
+            if epoch >= 80:
+                loss += quantize_regularize(model, device, alpha)
         
         if scaler is not None:
             scaler.scale(loss).backward()
@@ -62,17 +74,8 @@ def train_one_epoch(model, optimizer, alpha,
         else:
             optimizer.step()
         
-        metric_logger.update(lr=optimizer.param_groups[0]["lr"], loss=loss.item(), acc=acc.item())
-        all_preds.append(torch.argmax(output, dim=-1).detach().cpu().numpy())
-        all_targets.append(target.detach().cpu().numpy())
-    
-    all_preds, all_targets = np.concatenate(all_preds), np.concatenate(all_targets)
-    cm = confusion_matrix(all_targets, all_preds)
-    df_cm = pd.DataFrame(cm, index = [str(i) for i in range(num_classes)],
-                         columns=[str(i) for i in range(num_classes)])
-    plt.figure(figsize = (14, 10))
-    fig = sn.heatmap(df_cm, annot=True).get_figure()
-    plt.close()
+        metric_logger.update(lr=optimizer.param_groups[0]["lr"], loss=loss.item())
+
     metric_logger.synchronize_between_processes()
-    return metric_logger.meters["loss"].global_avg, metric_logger.meters["acc"].global_avg, fig
+    return metric_logger.meters["loss"].global_avg
     

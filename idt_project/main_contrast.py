@@ -6,8 +6,9 @@ import math
 import torch
 import copy
 from pathlib import Path
-from model import CNN_BN, CNN_conv, mlp_model
-from train_eval import train_one_epoch, evaluate
+from model import CNN_BN_bone, CNN_conv_bone, mlp_model, Conv2d_AutoEncoder
+from train_eval.train_contrast import train_one_epoch
+from train_eval.eval_contrast import evaluate
 from datasets import idt_dataset, custom_random_sampler
 import misc
 from torch.utils.tensorboard import SummaryWriter
@@ -24,7 +25,7 @@ def parse_args():
     parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
     parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
     
-    parser.add_argument('--model', default='CNN_conv', type=str)
+    parser.add_argument('--model', default='ResNet', type=str)
     parser.add_argument('-b', '--batch-size', default=30, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--num_classes', default=30, type=int)
@@ -66,7 +67,7 @@ def main(args):
     val_dataset = idt_dataset(args.test_data, args.test_label)
     
     train_sampler = custom_random_sampler(train_dataset, args.batch_size)
-    val_sampler = torch.utils.data.SequentialSampler(val_dataset)
+    val_sampler = custom_random_sampler(val_dataset, args.batch_size)
     
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, 
                                                sampler=train_sampler, num_workers=args.num_workers,
@@ -77,11 +78,13 @@ def main(args):
     
     print("Creating model: {}".format(args.model))
     if args.model == 'CNN_BN':
-        model = CNN_BN(1, args.num_classes, train_dataset.h, train_dataset.w)
+        model = CNN_BN_bone(1, args.num_classes, train_dataset.h, train_dataset.w)
     elif args.model == 'CNN_conv':
-        model = CNN_conv(1, args.num_classes, train_dataset.h, train_dataset.w)
+        model = CNN_conv_bone(1, args.num_classes, train_dataset.h, train_dataset.w)
     elif args.model == 'mlp_model':
         model = mlp_model(train_dataset.h * train_dataset.w, args.num_classes)
+    elif args.model == 'ResNet':
+        model = Conv2d_AutoEncoder(in_dim=(train_dataset.h, train_dataset.w), in_channel=1)
     else:
         raise ValueError("Model not supported")
     model.to(device)
@@ -92,6 +95,8 @@ def main(args):
         tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
     elif args.model == 'mlp_model':
         tb_writer.add_graph(model, torch.randn(1, train_dataset.h * train_dataset.w).to(device))
+    elif args.model == 'ResNet':
+        tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
         
     num_params, num_layers = sum(p.numel() for p in model.parameters()), len(list(model.parameters()))
     print("Number of parameters: {}".format(num_params), "Number of layers: {}".format(num_layers))
@@ -107,59 +112,44 @@ def main(args):
     
     print("Start training")
     start_time = time.time()
-    best_acc, best_model = 0.0, None
     for epoch in range(args.epochs):
-        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
-                                                           args.print_freq, scaler, args.num_classes)
-        
-        val_loss, val_acc, val_cfm = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
+        train_loss = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
+                                     args.print_freq, scaler, args.num_classes)
+        if epoch % 50 == 0:
+            val_loss, val_t_sne = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
+        else:
+            val_loss = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
         
         scheduler.step()
         
-        if val_acc > best_acc:
-            best_acc = val_acc
-            best_model = copy.deepcopy(model)
-        
         tb_writer.add_scalar("train/loss", train_loss, epoch)
-        tb_writer.add_scalar("train/acc", train_acc, epoch)
         tb_writer.add_scalar("val/loss", val_loss, epoch)
-        tb_writer.add_scalar("val/acc", val_acc, epoch)
-        tb_writer.add_figure("train/Confusion Matrix", train_cfm, epoch)
-        tb_writer.add_figure("val/Confusion Matrix", val_cfm, epoch)
-        plt.close(train_cfm)
-        plt.close(val_cfm)
+        if epoch % 50 == 0:
+            tb_writer.add_figure("val/t-SNE", val_t_sne, epoch)
+            plt.close(val_t_sne)
+        
+        # Save the best model
+        save_file = {
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            "epoch": epoch,
+        }
+        digits = len(str(args.epochs))
+        torch.save(save_file, os.path.join(args.output_dir, 'model_{}.pth'.format(str(epoch).zfill(digits))))
     
     print("Training time: ", datetime.timedelta(seconds=time.time() - start_time))
     tb_writer.close()
-    # Save the best model
-    save_file = {
-        'model': best_model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'scheduler': scheduler.state_dict(),
-        "epoch": epoch,
-    }
-    digits = len(str(args.epochs))
-    torch.save(save_file, os.path.join(args.output_dir, 'model_best_{}.pth'.format(str(epoch).zfill(digits))))
-    
-    # export model to onnx
-    if args.model == 'CNN_BN' or args.model == 'CNN_conv':
-        dummy_input = torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device)
-    elif args.model == 'mlp_model':
-        dummy_input = torch.randn(1, train_dataset.h * train_dataset.w).to(device)
-    torch.onnx.export(best_model, dummy_input, 
-                      os.path.join(args.output_dir, 'model_best.onnx'), 
-                      export_params=True, opset_version=16, dynamic_axes={'input': {0: 'batch_size'}, 'sensor_out': {0: 'batch_size'}},
-                      input_names=['input'], output_names=['sensor_out'])
     
     # min, max of the model parameters
     min_params, max_params = [], []
-    for p in best_model.parameters():
+    for p in model.parameters():
         min_params.append(p.min().item())
         max_params.append(p.max().item())
     min_params, max_params = np.min(min_params), np.max(max_params)
     print(f"Min of model parameters: {min_params}, Max of model parameters: {max_params}")
     # plot histogram of model parameters
-    params = [p.detach().cpu().numpy().flatten() for p in best_model.parameters()]
+    params = [p.detach().cpu().numpy().flatten() for p in model.parameters()]
     plt.hist(np.hstack(params), bins=100)
     plt.savefig(os.path.join(args.output_dir, 'model_params_hist.png'))
     

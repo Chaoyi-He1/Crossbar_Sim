@@ -1,11 +1,13 @@
 import numpy as np
 import os
 import torch.utils
+import random
 from torch.utils.data import Dataset
 import torch.utils.data
 from torchvision import transforms
 import torch
 from collections import defaultdict
+from typing import Iterator, Iterable, Optional, Sequence, List, TypeVar, Generic, Sized, Union
 
 
 def transform_data():
@@ -28,12 +30,12 @@ class idt_dataset(Dataset):
     def reformat_data(self):
         self.data_dict = defaultdict(list)
         for i in range(len(self.label)):
-            self.data_dict[self.label[i]].append(self.data[i])
+            self.data_dict[self.label[i, 0]].append(i)
         self.min_len = min([len(self.data_dict[key]) for key in self.data_dict.keys()])
         for k, v in self.data_dict.items():
             if len(v) > self.min_len:
                 # Randomly select self.min_len samples
-                self.data_dict[k] = np.random.choice(v, self.min_len, replace=False)
+                self.data_dict[k] = random.sample(v, self.min_len)
 
     def __len__(self):
         return len(self.data)
@@ -51,3 +53,70 @@ class idt_dataset(Dataset):
         data = torch.stack(data, dim=0)
         label = torch.concat(label, dim=0).view(-1)
         return data, label
+
+
+class custom_random_sampler(torch.utils.data.RandomSampler):
+    def __init__(self, data_source: idt_dataset, batch_size: int, replacement: bool = False,
+                 num_samples: Optional[int] = None, generator=None) -> None:
+        super().__init__(data_source, replacement, num_samples, generator)
+        self.batch_size = batch_size
+    
+    def __iter__(self) -> Iterator[int]:
+        """
+        generate the indices for the data, the indices are generated randomly
+        but guarantee that for each label the batch contains, there are two samples
+        """
+        n = len(self.data_source)
+        if self.generator is None:
+            seed = int(torch.empty((), dtype=torch.int64).random_().item())
+            generator = torch.Generator()
+            generator.manual_seed(seed)
+        else:
+            generator = self.generator
+        
+        if self.replacement:
+            for _ in range(self.num_samples // 32):
+                yield from torch.randint(high=n, size=(32,), dtype=torch.int64, generator=generator).tolist()
+            yield from torch.randint(high=n, size=(self.num_samples % 32,), dtype=torch.int64, generator=generator).tolist()
+        else:
+            self.data_source.reformat_data()
+            for _ in range(self.num_samples // self.batch_size):
+                # Randomly select batch_size / 2 labels from the total num_labels (len(self.data_source.data_dict)),
+                # data_dict is a dictionary with key as the label and value as the list of corresponding samples indices
+                # then for each selected label, randomly select two samples, then remove the selected samples from the data_dict
+                # and repeat the process until all the samples are selected
+                
+                #First, sort the self.data_source.data_dict based on the length of the value list, in descending order,
+                # if the length of the value lists are the same, randomly shuffle the dictionary order
+                
+                # check if the length of the value lists are the same
+                value_lens = [len(v) for v in self.data_source.data_dict.values()]
+                if len(set(value_lens)) == 1:
+                    # randomly shuffle the dictionary order
+                    data_dict_items = list(self.data_source.data_dict.items())
+                    random.shuffle(data_dict_items)
+                    self.data_source.data_dict = dict(data_dict_items)
+                else:
+                    # sort the dictionary based on the length of the value list in descending order
+                    data_dict_items = sorted(self.data_source.data_dict.items(), key=lambda x: len(x[1]), reverse=True)
+                    self.data_source.data_dict = dict(data_dict_items)
+
+                available_labels = [k for k, v in self.data_source.data_dict.items() if len(v) > 0]
+                if len(available_labels) < self.batch_size // 2:
+                    break
+                selected_labels = available_labels[:self.batch_size // 2]
+                indices = []
+                for label in selected_labels:
+                    selected_indices = random.sample(self.data_source.data_dict[label], 2)
+                    for i in selected_indices:
+                        indices.append(i)
+                        self.data_source.data_dict[label].remove(i)
+                yield from indices
+            available_labels = [k for k, v in self.data_source.data_dict.items() if len(v) > 0]
+            indices = []
+            for label in available_labels:
+                selected_indices = random.sample(self.data_source.data_dict[label], 2)
+                for i in selected_indices:
+                    indices.append(i)
+                    self.data_source.data_dict[label].remove(i)
+            yield from indices
