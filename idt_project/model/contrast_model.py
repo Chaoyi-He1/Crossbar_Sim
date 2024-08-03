@@ -122,26 +122,26 @@ class Conv2d_AutoEncoder(nn.Module):
         self.in_channel = in_channel
         self.temp_dim = in_dim
         self.channel = 16
-        pad = calculate_conv2d_padding(1, 11, self.temp_dim, self.temp_dim)
-        self.conv1 = Conv2d_BN_Relu(self.in_channel, self.channel, kernel_size=11, padding=pad)
-        pad = calculate_conv2d_padding(2, 13, self.temp_dim, tuple(element // 2 for element in self.temp_dim))
-        self.conv2 = Conv2d_BN_Relu(self.channel, self.channel * 2, kernel_size=13, stride=2, padding=pad)
+        pad = calculate_conv2d_padding(1, 5, self.temp_dim, self.temp_dim)
+        self.conv1 = Conv2d_BN_Relu(self.in_channel, self.channel, kernel_size=5, padding=pad)
+        pad = calculate_conv2d_padding(1, 5, self.temp_dim, tuple(element for element in self.temp_dim))
+        self.conv2 = Conv2d_BN_Relu(self.channel, self.channel * 2, kernel_size=5, stride=1, padding=pad)
         self.channel *= 2
-        self.temp_dim = tuple(element // 2 for element in self.temp_dim)
+        self.temp_dim = tuple(element for element in self.temp_dim)
 
         self.ResNet = nn.ModuleList()
-        res_params = list(zip([4, 4, 6, 6, 4], [7, 7, 9, 9, 11],   # num_blocks, kernel_size
-                              [3, 3, 3, 3, 3], [5, 5, 5, 3, 3]))   # stride, dilation
+        res_params = list(zip([4, 4, 6, 6, 4], [7, 7, 5, 3, 3],   # num_blocks, kernel_size
+                              [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]))   # stride, dilation
         # final channels = 512; final temp_dim = in_dim // (2^5) = in_dim // 32
         for i, (num_blocks, kernel_size, stride, dilation) in enumerate(res_params):
             self.ResNet.extend([ResBlock_2d(self.channel, kernel_size, stride, self.temp_dim, dilation,
                                             drop_path)
                                 for _ in range(num_blocks)])
             if i != len(res_params) - 1:
-                pad = calculate_conv2d_padding(stride, kernel_size, self.temp_dim, 
+                pad = calculate_conv2d_padding(2, kernel_size, self.temp_dim, 
                                                tuple(element // 2 for element in self.temp_dim), dilation)
                 self.ResNet.append(Conv2d_BN_Relu(self.channel, self.channel * 2,
-                                                  kernel_size, stride, pad, dilation))
+                                                  kernel_size, 2, pad, dilation))
                 self.channel *= 2
                 self.temp_dim = tuple(element // 2 for element in self.temp_dim)
 
@@ -166,3 +166,14 @@ class Conv2d_AutoEncoder(nn.Module):
             x = block(x)
         x = self.avgpool(x)
         return x.squeeze(-1).squeeze(-1)
+
+class AutoEncoder_cls(nn.Module):
+    def __init__(self, in_dim: Tuple[int, int] = (256, 1024), num_cls: int = 30,
+                 in_channel: int = 1, drop_path: float = 0.4) -> None:
+        super(AutoEncoder_cls, self).__init__()
+        self.backbone = Conv2d_AutoEncoder(in_dim, in_channel, drop_path)
+        self.fc = nn.Linear(512, num_cls)
+    
+    def forward(self, inputs: Tensor) -> Tensor:
+        x = self.backbone(inputs)
+        return self.fc(x)

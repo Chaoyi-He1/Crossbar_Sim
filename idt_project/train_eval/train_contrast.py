@@ -18,7 +18,7 @@ def criterion(pred):
     # Calculate the similarity matrix
     sim_matrix = torch.matmul(pred, pred.t())
     # do softmax for each row, make the diagonal
-    sim_matrix.scatter_(1, torch.arange(B).to(pred.device).view(-1, 1), 1e-6)
+    sim_matrix = sim_matrix - torch.eye(B).to(pred.device) * 1e6
     sim_matrix = F.log_softmax(sim_matrix, dim=-1)
     # Calculate the similarity between the positive pairs
     pos_sim = torch.diag(sim_matrix, diagonal=1)[::2]

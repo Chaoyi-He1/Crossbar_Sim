@@ -50,16 +50,10 @@ def train_one_epoch(model, optimizer, alpha,
         
         if scaler is not None:
             scaler.scale(loss).backward()
-        else:
-            loss.backward()
-        
-        if epoch >= 80:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
-        
-        if scaler is not None:
             scaler.step(optimizer)
             scaler.update()
         else:
+            loss.backward()
             optimizer.step()
         
         metric_logger.update(lr=optimizer.param_groups[0]["lr"], loss=loss.item(), acc=acc.item())

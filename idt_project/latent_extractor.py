@@ -7,7 +7,7 @@ import torch
 import copy
 from pathlib import Path
 from model import CNN_BN, CNN_conv, mlp_model, AutoEncoder_cls
-from train_eval import train_one_epoch, evaluate
+from train_eval import train_one_epoch, evaluate, feature_extractor
 from datasets import idt_dataset, custom_random_sampler
 import misc
 from torch.utils.tensorboard import SummaryWriter
@@ -23,6 +23,9 @@ def parse_args():
     parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_label.npy', type=str)
     parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
     parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
+    
+    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/model_099.pth', type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
     
     parser.add_argument('--model', default='CNN_conv', type=str)
     parser.add_argument('-b', '--batch-size', default=32, type=int,
@@ -50,7 +53,6 @@ def parse_args():
 def main(args):
     print(args)
     print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-    tb_writer = SummaryWriter()
     
     device = torch.device(args.device)
     
@@ -90,78 +92,34 @@ def main(args):
         raise ValueError("Model not supported")
     model.to(device)
     
-    if args.model == 'CNN_BN':
-        tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
-    elif args.model == 'CNN_conv':
-        tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
-    elif args.model == 'mlp_model':
-        tb_writer.add_graph(model, torch.randn(1, train_dataset.h * train_dataset.w).to(device))
-    elif args.model == 'ResNet':
-        tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
+    if args.resume.endswith('.pth'):
+        print("Loading checkpoint: {}".format(args.resume))
+        checkpoint = torch.load(args.resume, map_location='cpu')
+        model.load_state_dict(checkpoint['model'], strict=False)
+        # optimizer.load_state_dict(checkpoint['optimizer'])
+        # scheduler.load_state_dict(checkpoint['scheduler'])
         
-    num_params, num_layers = sum(p.numel() for p in model.parameters()), len(list(model.parameters()))
-    print("Number of parameters: {}".format(num_params), "Number of layers: {}".format(num_layers))
-    
-    params_to_optimize = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(params_to_optimize, lr=args.lr)
-    
-    lf = lambda x: ((1 + math.cos(x * math.pi / args.epochs)) / 2) * (1 - args.lrf) + args.lrf
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
-    scheduler.last_epoch = 0
+    for name, param in model.named_parameters():
+        param.requires_grad = False
     
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
     
-    print("Start training")
+    print("Start latent extractor inference")
     start_time = time.time()
-    for epoch in range(args.epochs):
-        # train_loss = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
-        #                              args.print_freq, scaler, args.num_classes)
-        # if epoch % 50 == 0:
-        #     val_loss, val_t_sne = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
-        # else:
-        #     val_loss = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
-        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
-                                                           args.print_freq, scaler, args.num_classes)
+    
+    train_t_sne, train_features, train_labels = feature_extractor(model, train_loader, device, 0, args.print_freq, scaler, args.num_classes)
         
-        val_loss, val_acc, val_cfm = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
-        scheduler.step()
+    val_t_sne, val_features, val_labels = feature_extractor(model, val_loader, device, 0, args.print_freq, scaler, args.num_classes)
         
-        tb_writer.add_scalar("train/loss", train_loss, epoch)
-        tb_writer.add_scalar("train/acc", train_acc, epoch)
-        tb_writer.add_scalar("val/loss", val_loss, epoch)
-        tb_writer.add_scalar("val/acc", val_acc, epoch)
-        tb_writer.add_figure("train/Confusion Matrix", train_cfm, epoch)
-        tb_writer.add_figure("val/Confusion Matrix", val_cfm, epoch)
-        plt.close(train_cfm)
-        plt.close(val_cfm)
-        # if epoch % 50 == 0:
-        #     tb_writer.add_figure("val/t-SNE", val_t_sne, epoch)
-        #     plt.close(val_t_sne)
-        
-        # Save the best model
-        save_file = {
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'scheduler': scheduler.state_dict(),
-            "epoch": epoch,
-        }
-        digits = len(str(args.epochs))
-        torch.save(save_file, os.path.join(args.output_dir, 'model_{}.pth'.format(str(epoch).zfill(digits))))
+    train_t_sne.savefig(os.path.join(args.output_dir, 'train_t_sne.png'))
+    val_t_sne.savefig(os.path.join(args.output_dir, 'val_t_sne.png'))
+    
+    np.save(os.path.join(args.output_dir, 'train_features.npy'), train_features)
+    np.save(os.path.join(args.output_dir, 'train_labels.npy'), train_labels)
+    np.save(os.path.join(args.output_dir, 'val_features.npy'), val_features)
+    np.save(os.path.join(args.output_dir, 'val_labels.npy'), val_labels)
     
     print("Training time: ", datetime.timedelta(seconds=time.time() - start_time))
-    tb_writer.close()
-    
-    # min, max of the model parameters
-    min_params, max_params = [], []
-    for p in model.parameters():
-        min_params.append(p.min().item())
-        max_params.append(p.max().item())
-    min_params, max_params = np.min(min_params), np.max(max_params)
-    print(f"Min of model parameters: {min_params}, Max of model parameters: {max_params}")
-    # plot histogram of model parameters
-    params = [p.detach().cpu().numpy().flatten() for p in model.parameters()]
-    plt.hist(np.hstack(params), bins=100)
-    plt.savefig(os.path.join(args.output_dir, 'model_params_hist.png'))
     
 if __name__ == '__main__':
     args = parse_args()

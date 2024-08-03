@@ -19,18 +19,18 @@ import matplotlib.pyplot as plt
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='IDT Project')
-    parser.add_argument('--train_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_data.npy', type=str)
-    parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_label.npy', type=str)
-    parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
-    parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
+    parser.add_argument('--train_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/train_features.npy', type=str)
+    parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/train_labels.npy', type=str)
+    parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/val_features.npy', type=str)
+    parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/val_labels.npy', type=str)
     
     parser.add_argument('--model', default='CNN_conv', type=str)
-    parser.add_argument('-b', '--batch-size', default=30, type=int,
+    parser.add_argument('-b', '--batch-size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--num_classes', default=30, type=int)
     parser.add_argument('--epochs', default=170, type=int)
     parser.add_argument('--lr', default=0.001, type=float)
-    parser.add_argument('--lrf', default=0.1, type=float)
+    parser.add_argument('--lrf', default=0.01, type=float)
     parser.add_argument('--alpha', default=0.01, type=float)
     
     parser.add_argument('-j', '--num_workers', default=8, type=int, metavar='N',
