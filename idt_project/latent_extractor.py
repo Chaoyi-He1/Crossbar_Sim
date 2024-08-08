@@ -6,7 +6,7 @@ import math
 import torch
 import copy
 from pathlib import Path
-from model import CNN_BN, CNN_conv, mlp_model, AutoEncoder_cls
+from model import CNN_BN, CNN_conv, mlp_model, AutoEncoder_cls, CNN_conv_bone
 from train_eval import train_one_epoch, evaluate, feature_extractor
 from datasets import idt_dataset, custom_random_sampler
 import misc
@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
     parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
     
-    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/model_099.pth', type=str, metavar='PATH',
+    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/model_best_199.pth', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     
     parser.add_argument('--model', default='CNN_conv', type=str)
@@ -74,16 +74,16 @@ def main(args):
     
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, 
                                                sampler=train_sampler, num_workers=args.num_workers,
-                                               drop_last=True, collate_fn=train_dataset.collate_fn)
+                                               drop_last=False, collate_fn=train_dataset.collate_fn)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
                                              sampler=val_sampler, num_workers=args.num_workers,
-                                             drop_last=True, collate_fn=val_dataset.collate_fn)
+                                             drop_last=False, collate_fn=val_dataset.collate_fn)
     
     print("Creating model: {}".format(args.model))
     if args.model == 'CNN_BN':
         model = CNN_BN(1, args.num_classes, train_dataset.h, train_dataset.w)
     elif args.model == 'CNN_conv':
-        model = CNN_conv(1, args.num_classes, train_dataset.h, train_dataset.w)
+        model = CNN_conv_bone(1, args.num_classes, train_dataset.h, train_dataset.w)
     elif args.model == 'mlp_model':
         model = mlp_model(train_dataset.h * train_dataset.w, args.num_classes)
     elif args.model == 'ResNet':

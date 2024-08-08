@@ -23,13 +23,15 @@ def parse_args():
     parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_label.npy', type=str)
     parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
     parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
+    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/model_099.pth', type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
     
     parser.add_argument('--model', default='CNN_conv', type=str)
     parser.add_argument('-b', '--batch-size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--num_classes', default=30, type=int)
-    parser.add_argument('--epochs', default=100, type=int)
-    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--epochs', default=30, type=int)
+    parser.add_argument('--lr', default=0.0001, type=float)
     parser.add_argument('--lrf', default=0.1, type=float)
     parser.add_argument('--alpha', default=0.01, type=float)
     
@@ -90,6 +92,13 @@ def main(args):
         raise ValueError("Model not supported")
     model.to(device)
     
+    start_epoch = 0
+    if args.resume.endswith('.pth'):
+        print("Loading checkpoint: {}".format(args.resume))
+        checkpoint = torch.load(args.resume, map_location='cpu')
+        model.load_state_dict(checkpoint['model'], strict=False)
+        start_epoch = checkpoint['epoch'] + 1
+    
     if args.model == 'CNN_BN':
         tb_writer.add_graph(model, torch.randn(1, 1, train_dataset.h, train_dataset.w).to(device))
     elif args.model == 'CNN_conv':
@@ -107,23 +116,23 @@ def main(args):
     
     lf = lambda x: ((1 + math.cos(x * math.pi / args.epochs)) / 2) * (1 - args.lrf) + args.lrf
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
-    scheduler.last_epoch = 0
+    scheduler.last_epoch = start_epoch
     
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
     
     print("Start training")
     start_time = time.time()
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs + start_epoch):
         # train_loss = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
         #                              args.print_freq, scaler, args.num_classes)
         # if epoch % 50 == 0:
         #     val_loss, val_t_sne = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
         # else:
         #     val_loss = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
-        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
+        train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, val_loader, device, epoch, 
                                                            args.print_freq, scaler, args.num_classes)
         
-        val_loss, val_acc, val_cfm = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
+        val_loss, val_acc, val_cfm = evaluate(model, train_loader, device, epoch, args.print_freq, scaler, args.num_classes)
         scheduler.step()
         
         tb_writer.add_scalar("train/loss", train_loss, epoch)

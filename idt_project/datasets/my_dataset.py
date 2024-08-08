@@ -42,7 +42,7 @@ class idt_dataset(Dataset):
 
     def __getitem__(self, idx):
         data = self.data[idx]
-        label = torch.from_numpy(self.label[idx]).long()
+        label = torch.tensor(self.label[idx]).long()
         if self.transform:
             data = self.transform(data)
         return data, label
@@ -51,7 +51,46 @@ class idt_dataset(Dataset):
     def collate_fn(batch):
         data, label = list(zip(*batch))
         data = torch.stack(data, dim=0)
-        label = torch.concat(label, dim=0).view(-1)
+        label = torch.cat(label, dim=0)
+        return data, label
+    
+class idt_dataset_mlp(Dataset):
+    def __init__(self, data_path, label_path):
+        super(idt_dataset_mlp, self).__init__()
+        self.data = np.load(data_path)
+        #rescale the data from [0, 255] to [0, 127] integer values
+        self.data = self.data // 2
+        self.label = np.load(label_path)
+        self.transform = transform_data()
+        self.h, self.w = 8, 8
+        # self.reformat_data()
+    
+    def reformat_data(self):
+        self.data_dict = defaultdict(list)
+        for i in range(len(self.label)):
+            self.data_dict[self.label[i, 0]].append(i)
+        self.min_len = min([len(self.data_dict[key]) for key in self.data_dict.keys()])
+        for k, v in self.data_dict.items():
+            if len(v) > self.min_len:
+                # Randomly select self.min_len samples
+                self.data_dict[k] = random.sample(v, self.min_len)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        data = self.data[idx]
+        label = torch.tensor(self.label[idx]).long()
+        if self.transform:
+            data = data.reshape(8, 8, 1)
+            data = self.transform(data)
+        return data, label
+    
+    @staticmethod
+    def collate_fn(batch):
+        data, label = list(zip(*batch))
+        data = torch.stack(data, dim=0)
+        label = torch.stack(label, dim=0)
         return data, label
 
 
