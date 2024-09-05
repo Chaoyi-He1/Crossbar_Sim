@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('-b', '--batch-size', default=32, type=int,
                         help='images per gpu, the total batch size is $NGPU x batch_size')
     parser.add_argument('--num_classes', default=30, type=int)
-    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--epochs', default=51, type=int)
     parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--lrf', default=0.1, type=float)
     parser.add_argument('--alpha', default=0.01, type=float)
@@ -110,18 +110,19 @@ def main(args):
     
     print("Start training")
     start_time = time.time()
+    model.named_parameters()
     for epoch in range(args.epochs):
         # before each epoch, add gaussian noise to the model parameters
         # for p in model.parameters():
         #     if p.requires_grad:
         #         p.data.add_(torch.randn_like(p) * 0.01)
         
-        if epoch <= 5 or (epoch > 10 and epoch <= 15) or (epoch > 20 and epoch <= 25) or (epoch > 30 and epoch <= 35) or (epoch > 40 and epoch <= 47):
+        if epoch <= 5 or (epoch > 10 and epoch <= 15) or (epoch > 20 and epoch <= 25) or (epoch > 30 and epoch <= 35) or (epoch > 40 and epoch <= 45):
             train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, train_loader, device, epoch, 
                                                             args.print_freq, scaler, args.num_classes)
             
             val_loss, val_acc, val_cfm = evaluate(model, val_loader, device, epoch, args.print_freq, scaler, args.num_classes)
-        elif (epoch > 5 and epoch <= 10) or (epoch > 15 and epoch <= 20) or (epoch > 25 and epoch <= 30) or (epoch > 35 and epoch <= 40) or (epoch > 47 and epoch <= 50):
+        elif (epoch > 5 and epoch <= 10) or (epoch > 15 and epoch <= 20) or (epoch > 25 and epoch <= 30) or (epoch > 35 and epoch <= 40) or (epoch > 45 and epoch <= 50):
             train_loss, train_acc, train_cfm = train_one_epoch(model, optimizer, args.alpha, val_loader, device, epoch, 
                                                             args.print_freq, scaler, args.num_classes)
             

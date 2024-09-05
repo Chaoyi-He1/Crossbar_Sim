@@ -96,6 +96,14 @@ def main(args):
         print("Loading checkpoint: {}".format(args.resume))
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'], strict=False)
+        
+        # check loaded model successfully or not
+        for p_state_dict, p_model in zip(checkpoint['model'].items(), model.state_dict().items()):
+            if not torch.equal(p_state_dict, p_model):
+                raise ValueError("Model not loaded successfully")
+
+        print("Model loaded successfully")
+            
         # optimizer.load_state_dict(checkpoint['optimizer'])
         # scheduler.load_state_dict(checkpoint['scheduler'])
         
