@@ -48,7 +48,7 @@ def feature_extractor(model, data_loader, device, epoch, print_freq=10, scaler=N
     model.eval()
     header = "Test:"
     metric_logger = util.MetricLogger(delimiter="  ")
-    
+
     all_preds, all_labels = [], []
     for images, target in metric_logger.log_every(data_loader, print_freq, header):
         images, target = images.to(device), target.to(device)
@@ -74,5 +74,5 @@ def feature_extractor(model, data_loader, device, epoch, print_freq=10, scaler=N
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
     ax.scatter(all_preds_[:, 0], all_preds_[:, 1], c=colors)
-    return fig, all_preds, all_labels
+    return fig, all_preds_, all_labels, colors, colormap
     

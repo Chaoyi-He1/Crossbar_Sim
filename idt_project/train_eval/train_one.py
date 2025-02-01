@@ -45,8 +45,8 @@ def train_one_epoch(model, optimizer, alpha,
         with torch.cuda.amp.autocast(enabled=(scaler is not None)):
             output = model(images)
             loss, acc = criterion(output, target)
-            # if epoch >= 10:
-            #     loss += quantize_regularize(model, device, alpha)
+            if epoch >= 10:
+                loss += quantize_regularize(model, device, alpha)
         
         if scaler is not None:
             scaler.scale(loss).backward()

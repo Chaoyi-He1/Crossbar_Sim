@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
     parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
     
-    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/model_best_199.pth', type=str, metavar='PATH',
+    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/feature/model_best_199.pth', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     
     parser.add_argument('--model', default='CNN_conv', type=str)
@@ -90,7 +90,7 @@ def main(args):
         model = AutoEncoder_cls(in_dim=(train_dataset.h, train_dataset.w), in_channel=1, num_cls=args.num_classes)
     else:
         raise ValueError("Model not supported")
-    model.to(device)
+    
     
     if args.resume.endswith('.pth'):
         print("Loading checkpoint: {}".format(args.resume))
@@ -98,7 +98,7 @@ def main(args):
         model.load_state_dict(checkpoint['model'], strict=False)
         
         # check loaded model successfully or not
-        for p_state_dict, p_model in zip(checkpoint['model'].items(), model.state_dict().items()):
+        for p_state_dict, p_model in zip(checkpoint['model'].values(), model.parameters()):
             if not torch.equal(p_state_dict, p_model):
                 raise ValueError("Model not loaded successfully")
 
@@ -106,6 +106,7 @@ def main(args):
             
         # optimizer.load_state_dict(checkpoint['optimizer'])
         # scheduler.load_state_dict(checkpoint['scheduler'])
+    model.to(device)
         
     for name, param in model.named_parameters():
         param.requires_grad = False
@@ -115,17 +116,27 @@ def main(args):
     print("Start latent extractor inference")
     start_time = time.time()
     
-    train_t_sne, train_features, train_labels = feature_extractor(model, train_loader, device, 0, args.print_freq, scaler, args.num_classes)
+    train_t_sne, train_features, train_labels, train_colors, colormap = feature_extractor(model, train_loader, device, 0, args.print_freq, scaler, args.num_classes)
         
-    val_t_sne, val_features, val_labels = feature_extractor(model, val_loader, device, 0, args.print_freq, scaler, args.num_classes)
+    val_t_sne, val_features, val_labels, val_colors, _ = feature_extractor(model, val_loader, device, 0, args.print_freq, scaler, args.num_classes)
         
     train_t_sne.savefig(os.path.join(args.output_dir, 'train_t_sne.png'))
     val_t_sne.savefig(os.path.join(args.output_dir, 'val_t_sne.png'))
+    colormap = [colormap(i) for i in range(30)]
     
-    np.save(os.path.join(args.output_dir, 'train_features.npy'), train_features)
-    np.save(os.path.join(args.output_dir, 'train_labels.npy'), train_labels)
-    np.save(os.path.join(args.output_dir, 'val_features.npy'), val_features)
-    np.save(os.path.join(args.output_dir, 'val_labels.npy'), val_labels)
+    # np.save(os.path.join(args.output_dir, 'train_features.npy'), train_features)
+    # np.save(os.path.join(args.output_dir, 'train_labels.npy'), train_labels)
+    # np.save(os.path.join(args.output_dir, 'train_colors.npy'), train_colors)
+    # np.save(os.path.join(args.output_dir, 'val_features.npy'), val_features)
+    # np.save(os.path.join(args.output_dir, 'val_labels.npy'), val_labels)
+    # np.save(os.path.join(args.output_dir, 'val_colors.npy'), val_colors)
+    np.savetxt(os.path.join(args.output_dir, 'train_features.csv'), train_features, delimiter=',')
+    np.savetxt(os.path.join(args.output_dir, 'train_labels.csv'), train_labels, delimiter=',')
+    np.savetxt(os.path.join(args.output_dir, 'train_colors.csv'), train_colors, delimiter=',')
+    np.savetxt(os.path.join(args.output_dir, 'val_features.csv'), val_features, delimiter=',')
+    np.savetxt(os.path.join(args.output_dir, 'val_labels.csv'), val_labels, delimiter=',')
+    np.savetxt(os.path.join(args.output_dir, 'val_colors.csv'), val_colors, delimiter=',')
+    np.savetxt(os.path.join(args.output_dir, 'colormap.csv'), colormap, delimiter=',')
     
     print("Training time: ", datetime.timedelta(seconds=time.time() - start_time))
     

@@ -22,3 +22,9 @@ idt_project/train_eval/__pycache__/*
 idt_project/*.log
 idt_project/runs/*
 idt_project/weights/*
+*.onnx
+*.pth
+*.npy
+*.npz
+*.mat
+*.pth

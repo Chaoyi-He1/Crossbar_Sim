@@ -8,11 +8,11 @@ class mlp_model(nn.Module):
     def __init__(self, in_ch: int, num_cls: int):
         super().__init__()
         self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(in_ch, 120)
+        self.fc1 = nn.Linear(in_ch, 128)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(120, 120)
+        self.fc2 = nn.Linear(128, 256)
         self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(120, num_cls)
+        self.fc3 = nn.Linear(256, num_cls)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.flatten(x)

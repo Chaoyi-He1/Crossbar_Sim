@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument('--epochs', default=51, type=int)
     parser.add_argument('--lr', default=0.001, type=float)
     parser.add_argument('--lrf', default=0.1, type=float)
-    parser.add_argument('--alpha', default=0.01, type=float)
+    parser.add_argument('--alpha', default=0.2, type=float)
     
     parser.add_argument('-j', '--num_workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
