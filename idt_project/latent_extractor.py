@@ -8,7 +8,7 @@ import copy
 from pathlib import Path
 from model import CNN_BN, CNN_conv, mlp_model, AutoEncoder_cls, CNN_conv_bone
 from train_eval import train_one_epoch, evaluate, feature_extractor
-from datasets import idt_dataset, custom_random_sampler
+from datasets import *
 import misc
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
@@ -19,12 +19,12 @@ import matplotlib.pyplot as plt
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='IDT Project')
-    parser.add_argument('--train_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_data.npy', type=str)
-    parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_label.npy', type=str)
-    parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data.npy', type=str)
-    parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label.npy', type=str)
+    parser.add_argument('--train_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_data_wifi.npy', type=str)
+    parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/idt_train_label_wifi.npy', type=str)
+    parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_data_wifi.npy', type=str)
+    parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/idt_test_label_wifi.npy', type=str)
     
-    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/feature/model_best_199.pth', type=str, metavar='PATH',
+    parser.add_argument('--resume', default='/data/chaoyi_he/Crossbar_Sim/weights/wifi/model_29.pth', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     
     parser.add_argument('--model', default='CNN_conv', type=str)
@@ -64,8 +64,8 @@ def main(args):
     # torch.cuda.manual_seed_all(seed)
     
     print("Creating data loaders")
-    train_dataset = idt_dataset(args.train_data, args.train_label)
-    val_dataset = idt_dataset(args.test_data, args.test_label)
+    train_dataset = idt_dataset_wifi(args.train_data, args.train_label)
+    val_dataset = idt_dataset_wifi(args.test_data, args.test_label)
     
     # train_sampler = custom_random_sampler(train_dataset, args.batch_size)
     # val_sampler = custom_random_sampler(val_dataset, args.batch_size)
@@ -83,7 +83,7 @@ def main(args):
     if args.model == 'CNN_BN':
         model = CNN_BN(1, args.num_classes, train_dataset.h, train_dataset.w)
     elif args.model == 'CNN_conv':
-        model = CNN_conv_bone(1, args.num_classes, train_dataset.h, train_dataset.w)
+        model = CNN_conv_bone(2, args.num_classes, train_dataset.h, train_dataset.w)
     elif args.model == 'mlp_model':
         model = mlp_model(train_dataset.h * train_dataset.w, args.num_classes)
     elif args.model == 'ResNet':
@@ -120,23 +120,23 @@ def main(args):
         
     val_t_sne, val_features, val_labels, val_colors, _ = feature_extractor(model, val_loader, device, 0, args.print_freq, scaler, args.num_classes)
         
-    train_t_sne.savefig(os.path.join(args.output_dir, 'train_t_sne.png'))
-    val_t_sne.savefig(os.path.join(args.output_dir, 'val_t_sne.png'))
-    colormap = [colormap(i) for i in range(30)]
+    # train_t_sne.savefig(os.path.join(args.output_dir, 'train_t_sne.png'))
+    # val_t_sne.savefig(os.path.join(args.output_dir, 'val_t_sne.png'))
+    # colormap = [colormap(i) for i in range(30)]
     
-    # np.save(os.path.join(args.output_dir, 'train_features.npy'), train_features)
-    # np.save(os.path.join(args.output_dir, 'train_labels.npy'), train_labels)
+    np.save(os.path.join("/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/", 'train_features_wifi.npy'), train_features)
+    np.save(os.path.join("/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/", 'train_labels_wifi.npy'), train_labels)
     # np.save(os.path.join(args.output_dir, 'train_colors.npy'), train_colors)
-    # np.save(os.path.join(args.output_dir, 'val_features.npy'), val_features)
-    # np.save(os.path.join(args.output_dir, 'val_labels.npy'), val_labels)
+    np.save(os.path.join("/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/", 'val_features_wifi.npy'), val_features)
+    np.save(os.path.join("/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/", 'val_labels_wifi.npy'), val_labels)
     # np.save(os.path.join(args.output_dir, 'val_colors.npy'), val_colors)
-    np.savetxt(os.path.join(args.output_dir, 'train_features.csv'), train_features, delimiter=',')
-    np.savetxt(os.path.join(args.output_dir, 'train_labels.csv'), train_labels, delimiter=',')
-    np.savetxt(os.path.join(args.output_dir, 'train_colors.csv'), train_colors, delimiter=',')
-    np.savetxt(os.path.join(args.output_dir, 'val_features.csv'), val_features, delimiter=',')
-    np.savetxt(os.path.join(args.output_dir, 'val_labels.csv'), val_labels, delimiter=',')
-    np.savetxt(os.path.join(args.output_dir, 'val_colors.csv'), val_colors, delimiter=',')
-    np.savetxt(os.path.join(args.output_dir, 'colormap.csv'), colormap, delimiter=',')
+    
+    # np.savetxt(os.path.join(args.output_dir, 'train_labels.csv'), train_labels, delimiter=',')
+    # np.savetxt(os.path.join(args.output_dir, 'train_colors.csv'), train_colors, delimiter=',')
+    # np.savetxt(os.path.join(args.output_dir, 'val_features.csv'), val_features, delimiter=',')
+    # np.savetxt(os.path.join(args.output_dir, 'val_labels.csv'), val_labels, delimiter=',')
+    # np.savetxt(os.path.join(args.output_dir, 'val_colors.csv'), val_colors, delimiter=',')
+    # np.savetxt(os.path.join(args.output_dir, 'colormap.csv'), colormap, delimiter=',')
     
     print("Training time: ", datetime.timedelta(seconds=time.time() - start_time))
     

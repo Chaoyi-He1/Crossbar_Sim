@@ -53,13 +53,80 @@ class idt_dataset(Dataset):
         data = torch.stack(data, dim=0)
         label = torch.cat(label, dim=0)
         return data, label
+
+
+class idt_dataset_wifi(Dataset):
+    def __init__(self, data_path, label_path):
+        super(idt_dataset_wifi, self).__init__()
+        self.data = np.load(data_path)
+        self.label = np.load(label_path)
+        
+        self.data = self.data[self.label != 30]
+        self.label = self.label[self.label != 30]
+        
+        self.transform = transform_data()
+        self.h, self.w = self.data.shape[1], self.data.shape[2]
+        
+        self.data = (self.data - self.data.min()) / (self.data.max() - self.data.min()) * 230 + 10
+        self.data = self.data.astype(np.uint8)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        data = self.data[idx]
+        label = torch.tensor(self.label[idx]).long()
+        if self.transform:
+            data = self.transform(data)
+        return data, label
+    
+    @staticmethod
+    def collate_fn(batch):
+        data, label = list(zip(*batch))
+        data = torch.stack(data, dim=0)
+        label = torch.tensor(label)
+        return data, label
+
+class idt_dataset_wifi_anomaly(Dataset):
+    def __init__(self, data_path, label_path):
+        super(idt_dataset_wifi_anomaly, self).__init__()
+        self.data = np.load(data_path)
+        self.label = np.load(label_path)
+        
+        self.transform = transform_data()
+        self.h, self.w = self.data.shape[1], self.data.shape[2]
+        
+        # self.data = (self.data - self.data.min()) / (self.data.max() - self.data.min()) * 230 + 10
+        # self.data = self.data.astype(np.uint8)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        data = self.data[idx]
+        label = torch.tensor(self.label[idx]).long()
+        anomaly = torch.tensor(0)
+        if self.transform:
+            data = self.transform(data)
+        if label == 30:
+            anomaly = torch.tensor(1)
+        return data, label, anomaly
+    
+    @staticmethod
+    def collate_fn(batch):
+        data, label, anomaly = list(zip(*batch))
+        data = torch.stack(data, dim=0)
+        label = torch.tensor(label)
+        anomaly = torch.tensor(anomaly)
+        return data, label, anomaly
     
 class idt_dataset_mlp(Dataset):
     def __init__(self, data_path, label_path):
         super(idt_dataset_mlp, self).__init__()
         self.data = np.load(data_path)
-        #rescale the data from [0, 255] to [0, 127] integer values
-        self.data = self.data // 2
+        #rescale the data from [0, 255] to [10, 240] integer values
+        self.data = (self.data - self.data.min()) / (self.data.max() - self.data.min()) * 230 + 10
+        self.data = self.data.astype(np.uint8)
         self.label = np.load(label_path)
         self.transform = transform_data()
         self.h, self.w = 8, 8

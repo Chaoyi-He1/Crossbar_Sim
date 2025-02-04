@@ -22,10 +22,10 @@ import matplotlib.pyplot as plt
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='IDT Project')
-    parser.add_argument('--train_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/train_features.npy', type=str)
-    parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/train_labels.npy', type=str)
-    parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/val_features.npy', type=str)
-    parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/val_labels.npy', type=str)
+    parser.add_argument('--train_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/train_features_wifi.npy', type=str)
+    parser.add_argument('--train_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Train/train_labels_wifi.npy', type=str)
+    parser.add_argument('--test_data', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/val_features_wifi.npy', type=str)
+    parser.add_argument('--test_label', default='/data/chaoyi_he/Crossbar_Sim/idt_project/data/Test/val_labels_wifi.npy', type=str)
     
     parser.add_argument('--model', default='mlp_model', type=str)
     parser.add_argument('-b', '--batch-size', default=32, type=int,
@@ -40,7 +40,7 @@ def parse_args():
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--print-freq', default=100, type=int, help='print frequency')
     parser.add_argument('--device', default='cuda', help='device')
-    parser.add_argument('--output-dir', default='./weights/', help='path where to save')
+    parser.add_argument('--output-dir', default='./weights/wifi/feature/', help='path where to save')
     parser.add_argument("--amp", default=True, type=bool,
                         help="Use torch.cuda.amp for mixed precision training")
     
